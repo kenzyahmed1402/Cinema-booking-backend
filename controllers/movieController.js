@@ -1,75 +1,63 @@
 import Movie from "../models/movies.js";
-import mongoose from "mongoose";
+import catchAsync from "../utils/catchAsync.js";
+import AppError from "../utils/AppError.js";
 
-export const createMovie = async (req,res)=>{
-    try{
-        const movie = await Movie.create(req.body);
-        res.json(movie);
-    } catch(error){
-        if(error.name === "ValidationError"){
-            return res.status(400).json("validation error");
-        }
-        res.status(500).json("server error")
-    }
-};
+export const createMovie = catchAsync(async (req, res) => {
+  const movie = await Movie.create(req.body);
+  res.status(201).json({
+    status: "success",
+    data: { movie },
+  });
+});
 
-export const getMovies = async (req,res)=>{
-    try{
-        const movies = await Movie.find();
-        res.json(movies);
-    }catch(error){
-        res.status(500).json("server error");
-    }
-};
+export const getMovies = catchAsync(async (req, res) => {
+  const movies = await Movie.find();
+  res.json({
+    status: "success",
+    results: movies.length,
+    data: { movies },
+  });
+});
 
-export const getMovieById = async (req,res)=>{
-    try{
-        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
-            return res.status(400).json("Invalid Id");
-        }
-        const movie = await Movie.findById(req.params.id);
-        if(!movie){
-            return res.status(404).json("movie not found");
-        }
-        res.json(movie);
-    }catch(error){
-        res.status(500).json("server error");
-    }
-};
+export const getMovieById = catchAsync(async (req, res) => {
+  const movie = await Movie.findById(req.params.id);
 
-export const updateMovie = async (req,res)=>{
-    try{
-        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
-            return res.status(400).json("Invalid Id");
-        }
-        const movie = await Movie.findOneAndUpdate(
-            {_id: req.params.id},
-            req.body,
-            {returnDocument:"after", runValidators: true}
-        )
-        if(!movie){
-            return res.status(404).json("movie not found");
-        }
-        res.json(movie);
-    }catch(error){
-        if(error.name === "ValidationError"){
-            return res.status(400).json("validation error");
-        }
-        res.status(500).json("server error")
-    }
-};
+  if (!movie) {
+    throw new AppError("Movie not found", 404);
+  }
 
-export const deleteMovie = async (req,res)=>{
-    try{
-        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
-            return res.status(400).json("Invalid Id");
-        }
-        const movie = await Movie.findOneAndDelete({_id:req.params.id});
-        if(!movie){
-            return res.status(400).json("movie not found");
-        }
-        res.json(movie);
-    }catch(error){
-        res.status(500).json("server error");
-    }
-};
+  res.json({
+    status: "success",
+    data: { movie },
+  });
+});
+
+export const updateMovie = catchAsync(async (req, res) => {
+  const movie = await Movie.findOneAndUpdate(
+    { _id: req.params.id },
+    req.body,
+    { new: true, runValidators: true }
+  );
+
+  if (!movie) {
+    throw new AppError("Movie not found", 404);
+  }
+
+  res.json({
+    status: "success",
+    data: { movie },
+  });
+});
+
+export const deleteMovie = catchAsync(async (req, res) => {
+  const movie = await Movie.findOneAndDelete({ _id: req.params.id });
+
+  if (!movie) {
+    throw new AppError("Movie not found", 404);
+  }
+
+  res.status(204).json({
+    status: "success",
+    data: null,
+  });
+});

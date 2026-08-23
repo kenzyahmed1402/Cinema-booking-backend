@@ -1,77 +1,63 @@
-import Cinema from "../models/cinema.js"
-import mongoose from "mongoose"
+import Cinema from "../models/cinema.js";
+import catchAsync from "../utils/catchAsync.js";
+import AppError from "../utils/AppError.js";
 
-export const createCinema = async (req,res)=>{
-    try{
-        const cinema = await Cinema.create(req.body);
-        res.json(cinema);
-    }catch(error){
-        if(error.name === "ValidationError"){
-            return res.status(400).json("validation error");
-        }
-        res.status(500).json("server error")
-    }
-};
+export const createCinema = catchAsync(async (req, res) => {
+  const cinema = await Cinema.create(req.body);
+  res.status(201).json({
+    status: "success",
+    data: { cinema },
+  });
+});
 
-export const getCinemas = async (req,res)=>{
-    try{
-        const cinemas = await Cinema.find();
-        res.json(cinemas);
-    }catch(error){
-        res.status(500).json("server error")
-    }
-};
+export const getCinemas = catchAsync(async (req, res) => {
+  const cinemas = await Cinema.find();
+  res.json({
+    status: "success",
+    results: cinemas.length,
+    data: { cinemas },
+  });
+});
 
-export const getCinemaById = async (req,res)=>{
-    try{
-        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
-            return res.status(400).json("Invalid Id");
-        }
-        const cinema = await Cinema.findById(req.params.id);
-        
-        if(!cinema){
-            return res.status(404).json("movie not found");
-        }
-        res.json(cinema);
-    }catch(error){
-        res.status(500).json("server error")
-    }
-};
+export const getCinemaById = catchAsync(async (req, res) => {
+  const cinema = await Cinema.findById(req.params.id);
 
-export const updateCinema = async (req,res) =>{
-    try{
-        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
-            return res.status(400).json("Invalid Id");
-        }
-        const Ucinema = await Cinema.findOneAndUpdate(
-            {_id: req.params.id},
-            req.body,
-            {returnDocument: "after" , runValidators: true}
-        )
-         if(!Ucinema){
-            return res.status(404).json("movie not found");
-        }
-        res.json(Ucinema);
-    }catch(error){
-        if(error.name === "ValidationError"){
-            return res.status(400).json("validation error");
-        }
-        res.status(500).json("server error")
-        console.log(error);
-    }
-};
+  if (!cinema) {
+    throw new AppError("Cinema not found", 404);
+  }
 
-export const deleteCinema = async (req,res) =>{
-    try{
-        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
-            return res.status(400).json("Invalid Id");
-        }
-        const cinema = await Cinema.findOneAndDelete({_id: req.params.id})
-         if(!cinema){
-            return res.status(404).json("movie not found");
-        }
-        res.json(cinema);
-    }catch(error){
-        res.status(500).json("server error")
-    }
-};
+  res.json({
+    status: "success",
+    data: { cinema },
+  });
+});
+
+export const updateCinema = catchAsync(async (req, res) => {
+  const cinema = await Cinema.findOneAndUpdate(
+    { _id: req.params.id },
+    req.body,
+    { new: true, runValidators: true }
+  );
+
+  if (!cinema) {
+    throw new AppError("Cinema not found", 404);
+  }
+
+  res.json({
+    status: "success",
+    data: { cinema },
+  });
+});
+
+export const deleteCinema = catchAsync(async (req, res) => {
+  const cinema = await Cinema.findOneAndDelete({ _id: req.params.id });
+
+  if (!cinema) {
+    throw new AppError("Cinema not found", 404);
+  }
+
+  res.status(204).json({
+    status: "success",
+    data: null,
+  });
+});
