@@ -8,13 +8,14 @@ import {
 } from "../controllers/showTimeController.js";
 import validateObjectId from "../middlewares/validateObjectId.js";
 import { validateShowtime } from "../validators/showtimeValidator.js";
+import { protect, restrictTo } from "../middlewares/auth.js";
 
 const STRouter = express.Router();
 
 STRouter.get("/", getShowtimes);
 STRouter.get("/:id", validateObjectId(), getShowtimeById);
-STRouter.post("/", validateShowtime, createShowtime);
-STRouter.put("/:id", validateObjectId(), validateShowtime, updateShowtime);
-STRouter.delete("/:id", validateObjectId(), deleteShowtime);
+STRouter.post("/", protect, restrictTo("ADMIN"), validateShowtime, createShowtime);
+STRouter.put("/:id", protect, restrictTo("ADMIN"), validateObjectId(), validateShowtime, updateShowtime);
+STRouter.delete("/:id", protect, restrictTo("ADMIN"), validateObjectId(), deleteShowtime);
 
 export default STRouter;

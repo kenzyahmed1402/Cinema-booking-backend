@@ -7,6 +7,7 @@ import cinemaRouter from "./routes/cinemaRouter.js";
 import ScreenRouter from "./routes/screensRouter.js";
 import STRouter from "./routes/showTimeRouter.js";
 import bookingRouter from "./routes/bookingRouter.js";
+import authRouter from "./routes/authRouter.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import AppError from "./utils/AppError.js";
 
@@ -18,6 +19,7 @@ app.use('/cinemas',cinemaRouter);
 app.use('/screens',ScreenRouter);
 app.use('/showTimes',STRouter);
 app.use('/bookings',bookingRouter);
+app.use('/auth',authRouter);
 
 app.use((req, res, next) => {
     next(new AppError(`Can't find ${req.originalUrl} on this server`, 404));
