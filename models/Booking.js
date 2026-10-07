@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const seatPattern = /^[A-Z]\d{1,2}$/;
+export const seatPattern = /^[A-Z]\d{1,2}$/;
 
 const bookingSchema = new mongoose.Schema(
   {

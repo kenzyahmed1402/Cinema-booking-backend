@@ -34,7 +34,17 @@ export const createBooking = catchAsync(async (req, res) => {
     );
   }
 
-  const booking = await Booking.create(req.body);
+  let booking;
+  try {
+    booking = await Booking.create(req.body);
+  } catch (err) {
+    // Release the seats reserved above so a failed booking doesn't hold them
+    await Showtime.updateOne(
+      { _id: showtime },
+      { $pull: { bookedSeats: { $in: seats } } }
+    );
+    throw err;
+  }
 
   res.status(201).json({
     status: "success",

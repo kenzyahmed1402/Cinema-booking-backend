@@ -65,6 +65,8 @@ const validateField = (field, value, rules) => {
         errors.push(`${field}[${index}] must be a valid ObjectId`);
       } else if (rules.arrayItemType === "string" && typeof item !== "string") {
         errors.push(`${field}[${index}] must be a string`);
+      } else if (rules.arrayItemPattern && !rules.arrayItemPattern.test(item)) {
+        errors.push(`${field}[${index}] has an invalid format`);
       }
     });
   }
