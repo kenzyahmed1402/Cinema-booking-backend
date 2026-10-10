@@ -37,7 +37,9 @@ const handleValidationErrorDB = (err) => {
 
 const handleDuplicateFieldDB = (err) => {
   const fields = Object.keys(err.keyValue ?? {});
-  const values = Object.values(err.keyValue ?? {});
+  const values = Object.values(err.keyValue ?? {}).map((value) =>
+    value instanceof Date ? value.toISOString() : value
+  );
   const message = fields.length
     ? `Duplicate value for ${fields.join(', ')}: ${values.join(', ')}. Please use another value.`
     : 'Duplicate field value. Please use another value.';
