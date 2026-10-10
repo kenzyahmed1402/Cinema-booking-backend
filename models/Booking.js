@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
-export const seatPattern = /^[A-Z]\d{1,2}$/;
+// Row letter + seat number 1-99, no leading zeros (A01 would be a second A1)
+export const seatPattern = /^[A-Z][1-9]\d?$/;
 
 const bookingSchema = new mongoose.Schema(
   {

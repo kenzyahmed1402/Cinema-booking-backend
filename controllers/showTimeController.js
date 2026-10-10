@@ -3,6 +3,7 @@ import Movie from "../models/movies.js";
 import Screen from "../models/screens.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { assertSeatsFit } from "../utils/seatLayout.js";
 
 export const createShowtime = catchAsync(async (req, res) => {
   const { movie, screen } = req.body;
@@ -59,9 +60,19 @@ export const updateShowtime = catchAsync(async (req, res) => {
   }
 
   if (req.body.screen) {
-    const screenExists = await Screen.findById(req.body.screen);
-    if (!screenExists) {
+    const newScreen = await Screen.findById(req.body.screen);
+    if (!newScreen) {
       throw new AppError("Screen not found", 404);
+    }
+
+    // Seats already booked must exist on (and fit) the new screen
+    const existing = await Showtime.findById(req.params.id);
+    if (existing && existing.bookedSeats.length > 0) {
+      try {
+        assertSeatsFit(newScreen, existing.bookedSeats, { alreadyBooked: 0 });
+      } catch (err) {
+        throw new AppError(`Can't move this showtime to that screen. ${err.message}`, 409);
+      }
     }
   }
 

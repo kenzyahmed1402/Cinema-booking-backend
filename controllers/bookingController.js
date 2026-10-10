@@ -2,6 +2,7 @@ import Booking from "../models/Booking.js";
 import Showtime from "../models/showTime.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { assertSeatsFit } from "../utils/seatLayout.js";
 
 // A booking holds its seats on its showtime unless it is cancelled
 const heldSeats = ({ showtime, seats, status }) => ({
@@ -40,10 +41,14 @@ const accessFilter = (req) =>
 export const createBooking = catchAsync(async (req, res) => {
   const { showtime, seats } = req.body;
 
-  const showtimeDoc = await Showtime.findById(showtime);
+  const showtimeDoc = await Showtime.findById(showtime).populate("screen");
   if (!showtimeDoc) {
     throw new AppError("Showtime not found", 404);
   }
+
+  assertSeatsFit(showtimeDoc.screen, seats, {
+    alreadyBooked: showtimeDoc.bookedSeats.length,
+  });
 
   const alreadyTaken = seats.filter((seat) =>
     showtimeDoc.bookedSeats.includes(seat)
@@ -137,23 +142,35 @@ export const updateBooking = catchAsync(async (req, res) => {
   const sameShowtime = before.showtime === after.showtime;
   const newSeats = changes.seats ?? existing.seats;
 
-  // Reprice only when the seats or showtime change; editing name, email or
-  // status keeps the price that was charged
-  let newTotalPrice = existing.totalPrice;
-  if (!sameShowtime || !sameSeats(existing.seats, newSeats)) {
-    const showtimeDoc = await Showtime.findById(after.showtime);
-    if (!showtimeDoc) {
-      throw new AppError("Showtime not found", 404);
-    }
-    newTotalPrice = priceFor(showtimeDoc, newSeats);
-  }
-
   const toReserve = sameShowtime
     ? after.seats.filter((seat) => !before.seats.includes(seat))
     : after.seats;
   const toRelease = sameShowtime
     ? before.seats.filter((seat) => !after.seats.includes(seat))
     : before.seats;
+
+  const seatsOrShowtimeChanged = !sameShowtime || !sameSeats(existing.seats, newSeats);
+
+  let newTotalPrice = existing.totalPrice;
+  if (seatsOrShowtimeChanged || toReserve.length > 0) {
+    const showtimeDoc = await Showtime.findById(after.showtime).populate("screen");
+    if (!showtimeDoc) {
+      throw new AppError("Showtime not found", 404);
+    }
+
+    if (toReserve.length > 0) {
+      assertSeatsFit(showtimeDoc.screen, toReserve, {
+        // seats this booking gives back on the same showtime free up room
+        alreadyBooked: showtimeDoc.bookedSeats.length - (sameShowtime ? toRelease.length : 0),
+      });
+    }
+
+    // Reprice only when the seats or showtime change; editing name, email or
+    // status keeps the price that was charged
+    if (seatsOrShowtimeChanged) {
+      newTotalPrice = priceFor(showtimeDoc, newSeats);
+    }
+  }
 
   // Reserve first: if the new seats are taken, nothing has changed yet
   if (toReserve.length > 0 && !(await reserveSeats(after.showtime, toReserve))) {
