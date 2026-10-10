@@ -24,6 +24,14 @@ const releaseSeats = (showtime, seats) =>
     { $pull: { bookedSeats: { $in: seats } } }
   );
 
+// The server always calculates the price; rounded to cents to avoid
+// floating point leftovers like 0.30000000000000004
+const priceFor = (showtimeDoc, seats) =>
+  Math.round(showtimeDoc.price * seats.length * 100) / 100;
+
+const sameSeats = (a, b) =>
+  a.length === b.length && [...a].sort().join() === [...b].sort().join();
+
 export const createBooking = catchAsync(async (req, res) => {
   const { showtime, seats } = req.body;
 
@@ -54,7 +62,11 @@ export const createBooking = catchAsync(async (req, res) => {
   let booking;
   try {
     // New bookings always start as pending; only an admin changes the status
-    booking = await Booking.create({ ...req.body, status: "pending" });
+    booking = await Booking.create({
+      ...req.body,
+      status: "pending",
+      totalPrice: priceFor(showtimeDoc, seats),
+    });
   } catch (err) {
     // Release the seats reserved above so a failed booking doesn't hold them
     await releaseSeats(showtime, seats);
@@ -103,12 +115,23 @@ export const updateBooking = catchAsync(async (req, res) => {
     throw new AppError("Booking not found", 404);
   }
 
-  const before = heldSeats(existing);
-  const after = heldSeats({ ...existing.toObject(), ...req.body });
-  const sameShowtime = before.showtime === after.showtime;
+  // The price is calculated, never taken from the client
+  const { totalPrice, ...changes } = req.body;
 
-  if (!sameShowtime && !(await Showtime.exists({ _id: after.showtime }))) {
-    throw new AppError("Showtime not found", 404);
+  const before = heldSeats(existing);
+  const after = heldSeats({ ...existing.toObject(), ...changes });
+  const sameShowtime = before.showtime === after.showtime;
+  const newSeats = changes.seats ?? existing.seats;
+
+  // Reprice only when the seats or showtime change; editing name, email or
+  // status keeps the price that was charged
+  let newTotalPrice = existing.totalPrice;
+  if (!sameShowtime || !sameSeats(existing.seats, newSeats)) {
+    const showtimeDoc = await Showtime.findById(after.showtime);
+    if (!showtimeDoc) {
+      throw new AppError("Showtime not found", 404);
+    }
+    newTotalPrice = priceFor(showtimeDoc, newSeats);
   }
 
   const toReserve = sameShowtime
@@ -130,7 +153,7 @@ export const updateBooking = catchAsync(async (req, res) => {
   try {
     booking = await Booking.findOneAndUpdate(
       { _id: req.params.id },
-      req.body,
+      { ...changes, totalPrice: newTotalPrice },
       { new: true, runValidators: true }
     );
 

@@ -11,8 +11,9 @@ const bookingSchema = {
     minLength: 1,
     arrayItemType: "string",
     arrayItemPattern: seatPattern,
+    uniqueItems: true,
   },
-  totalPrice: { required: true, type: "number", min: 0 },
+  // totalPrice is not accepted from the client; the server calculates it
   status: { type: "string", enum: ["pending", "confirmed", "cancelled"] },
 };
 

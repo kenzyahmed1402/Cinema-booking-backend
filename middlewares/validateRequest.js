@@ -71,6 +71,10 @@ const validateField = (field, value, rules) => {
     });
   }
 
+  if (rules.uniqueItems && Array.isArray(value) && new Set(value).size !== value.length) {
+    errors.push(`${field} must not contain duplicates`);
+  }
+
   return errors;
 };
 
