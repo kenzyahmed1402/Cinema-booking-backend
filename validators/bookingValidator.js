@@ -18,3 +18,4 @@ const bookingSchema = {
 };
 
 export const validateBooking = validateRequest(bookingSchema);
+export const validateBookingUpdate = validateRequest(bookingSchema, { partial: true });

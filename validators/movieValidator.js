@@ -21,3 +21,4 @@ const movieSchema = {
 };
 
 export const validateMovie = validateRequest(movieSchema);
+export const validateMovieUpdate = validateRequest(movieSchema, { partial: true });

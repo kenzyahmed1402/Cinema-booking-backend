@@ -7,3 +7,4 @@ const screenSchema = {
 };
 
 export const validateScreen = validateRequest(screenSchema);
+export const validateScreenUpdate = validateRequest(screenSchema, { partial: true });

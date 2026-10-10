@@ -6,3 +6,4 @@ const cinemaSchema = {
 };
 
 export const validateCinema = validateRequest(cinemaSchema);
+export const validateCinemaUpdate = validateRequest(cinemaSchema, { partial: true });

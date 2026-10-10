@@ -5,10 +5,17 @@ const isValidEmail = (email) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
-const validateField = (field, value, rules) => {
+const validateField = (field, value, rules, partial) => {
   const errors = [];
 
-  if (rules.required && (value === undefined || value === null || value === "")) {
+  // In partial mode (updates) a missing required field is fine, but it
+  // can't be sent empty, or an update could blank it out
+  if (partial && rules.required && (value === null || value === "")) {
+    errors.push(`${field} cannot be empty`);
+    return errors;
+  }
+
+  if (!partial && rules.required && (value === undefined || value === null || value === "")) {
     errors.push(`${field} is required`);
     return errors;
   }
@@ -78,12 +85,19 @@ const validateField = (field, value, rules) => {
   return errors;
 };
 
-const validateRequest = (schema) => {
+// partial: true is for updates - only the fields that were sent are checked
+const validateRequest = (schema, { partial = false } = {}) => {
   return (req, res, next) => {
+    // Express 5 leaves req.body undefined when the request has no body
+    const body = req.body ?? {};
     const errors = [];
 
+    if (partial && !Object.keys(schema).some((field) => body[field] !== undefined)) {
+      return next(new AppError("Provide at least one field to update", 400));
+    }
+
     for (const [field, rules] of Object.entries(schema)) {
-      errors.push(...validateField(field, req.body[field], rules));
+      errors.push(...validateField(field, body[field], rules, partial));
     }
 
     if (errors.length > 0) {

@@ -8,3 +8,4 @@ const showtimeSchema = {
 };
 
 export const validateShowtime = validateRequest(showtimeSchema);
+export const validateShowtimeUpdate = validateRequest(showtimeSchema, { partial: true });
