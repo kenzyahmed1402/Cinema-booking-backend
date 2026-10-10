@@ -32,6 +32,11 @@ const priceFor = (showtimeDoc, seats) =>
 const sameSeats = (a, b) =>
   a.length === b.length && [...a].sort().join() === [...b].sort().join();
 
+// Customers can only reach their own bookings; admins can reach all of them.
+// Someone else's booking looks "not found" so its ID isn't confirmed.
+const accessFilter = (req) =>
+  req.user.role === "ADMIN" ? {} : { user: req.user._id };
+
 export const createBooking = catchAsync(async (req, res) => {
   const { showtime, seats } = req.body;
 
@@ -64,6 +69,9 @@ export const createBooking = catchAsync(async (req, res) => {
     // New bookings always start as pending; only an admin changes the status
     booking = await Booking.create({
       ...req.body,
+      user: req.user._id,
+      customerName: req.user.name,
+      customerEmail: req.user.email,
       status: "pending",
       totalPrice: priceFor(showtimeDoc, seats),
     });
@@ -80,7 +88,7 @@ export const createBooking = catchAsync(async (req, res) => {
 });
 
 export const getBookings = catchAsync(async (req, res) => {
-  const bookings = await Booking.find().populate({
+  const bookings = await Booking.find(accessFilter(req)).populate({
     path: "showtime",
     populate: [{ path: "movie" }, { path: "screen" }],
   });
@@ -93,7 +101,10 @@ export const getBookings = catchAsync(async (req, res) => {
 });
 
 export const getBookingById = catchAsync(async (req, res) => {
-  const booking = await Booking.findById(req.params.id).populate({
+  const booking = await Booking.findOne({
+    _id: req.params.id,
+    ...accessFilter(req),
+  }).populate({
     path: "showtime",
     populate: [{ path: "movie" }, { path: "screen" }],
   });
@@ -109,7 +120,10 @@ export const getBookingById = catchAsync(async (req, res) => {
 });
 
 export const updateBooking = catchAsync(async (req, res) => {
-  const existing = await Booking.findById(req.params.id);
+  const existing = await Booking.findOne({
+    _id: req.params.id,
+    ...accessFilter(req),
+  });
 
   if (!existing) {
     throw new AppError("Booking not found", 404);

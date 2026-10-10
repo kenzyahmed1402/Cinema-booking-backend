@@ -4,6 +4,11 @@ export const seatPattern = /^[A-Z]\d{1,2}$/;
 
 const bookingSchema = new mongoose.Schema(
   {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'Booking user is required'],
+    },
     showtime: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Showtime',
@@ -61,6 +66,7 @@ const bookingSchema = new mongoose.Schema(
 
 bookingSchema.index({ showtime: 1, status: 1 });
 bookingSchema.index({ customerEmail: 1 });
+bookingSchema.index({ user: 1 });
 
 const Booking = mongoose.model('Booking', bookingSchema);
 
