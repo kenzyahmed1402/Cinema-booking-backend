@@ -115,8 +115,8 @@ export const updateBooking = catchAsync(async (req, res) => {
     throw new AppError("Booking not found", 404);
   }
 
-  // The price is calculated, never taken from the client
-  const { totalPrice, ...changes } = req.body;
+  // Only validated fields; totalPrice isn't one of them, it's calculated below
+  const changes = req.body;
 
   const before = heldSeats(existing);
   const after = heldSeats({ ...existing.toObject(), ...changes });

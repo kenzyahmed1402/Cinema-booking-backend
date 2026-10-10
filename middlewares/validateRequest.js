@@ -104,6 +104,14 @@ const validateRequest = (schema, { partial = false } = {}) => {
       return next(new AppError(errors.join(". "), 400));
     }
 
+    // Keep only the fields this schema allows, so a request can't set
+    // fields like _id or bookedSeats that the API doesn't accept
+    req.body = Object.fromEntries(
+      Object.keys(schema)
+        .filter((field) => body[field] !== undefined)
+        .map((field) => [field, body[field]])
+    );
+
     next();
   };
 };
