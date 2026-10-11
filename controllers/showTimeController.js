@@ -3,6 +3,7 @@ import Movie, { MAX_MOVIE_MINUTES } from "../models/movies.js";
 import Screen from "../models/screens.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { deleteShowtimesWhere } from "../utils/cascade.js";
 import { assertSeatsFit } from "../utils/seatLayout.js";
 
 // Minutes kept free after every showing for cleaning and changeover
@@ -155,11 +156,13 @@ export const updateShowtime = catchAsync(async (req, res) => {
 });
 
 export const deleteShowtime = catchAsync(async (req, res) => {
-  const showtime = await Showtime.findOneAndDelete({ _id: req.params.id });
-
+  const showtime = await Showtime.findById(req.params.id);
   if (!showtime) {
     throw new AppError("Showtime not found", 404);
   }
+
+  // Blocked while it has active bookings; cancelled ones go with it
+  await deleteShowtimesWhere({ _id: showtime._id }, "this showtime");
 
   res.status(204).json({
     status: "success",

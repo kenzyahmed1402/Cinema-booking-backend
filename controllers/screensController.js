@@ -3,6 +3,7 @@ import Cinema from "../models/cinema.js";
 import Showtime from "../models/showTime.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { deleteShowtimesWhere } from "../utils/cascade.js";
 import { describeLayout, seatsNotOnScreen } from "../utils/seatLayout.js";
 
 export const createScreen = catchAsync(async (req, res) => {
@@ -101,11 +102,14 @@ export const updateScreen = catchAsync(async (req, res) => {
 });
 
 export const deleteScreen = catchAsync(async (req, res) => {
-  const screen = await Screen.findOneAndDelete({ _id: req.params.id });
-
+  const screen = await Screen.findById(req.params.id);
   if (!screen) {
     throw new AppError("Screen not found", 404);
   }
+
+  // Its showtimes go too, unless one of them has active bookings
+  await deleteShowtimesWhere({ screen: screen._id }, "this screen");
+  await Screen.deleteOne({ _id: screen._id });
 
   res.status(204).json({
     status: "success",

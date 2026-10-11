@@ -1,6 +1,7 @@
 import Movie from "../models/movies.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { deleteShowtimesWhere } from "../utils/cascade.js";
 
 export const createMovie = catchAsync(async (req, res) => {
   const movie = await Movie.create(req.body);
@@ -50,11 +51,14 @@ export const updateMovie = catchAsync(async (req, res) => {
 });
 
 export const deleteMovie = catchAsync(async (req, res) => {
-  const movie = await Movie.findOneAndDelete({ _id: req.params.id });
-
+  const movie = await Movie.findById(req.params.id);
   if (!movie) {
     throw new AppError("Movie not found", 404);
   }
+
+  // Its showtimes go too, unless one of them has active bookings
+  await deleteShowtimesWhere({ movie: movie._id }, "this movie");
+  await Movie.deleteOne({ _id: movie._id });
 
   res.status(204).json({
     status: "success",
