@@ -3,6 +3,7 @@ import Cinema from "../models/cinema.js";
 import Showtime from "../models/showTime.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { buildFilter, getPagination, idFilter, sendPage } from "../utils/listQuery.js";
 import { deleteShowtimesWhere } from "../utils/cascade.js";
 import { describeLayout, seatsNotOnScreen } from "../utils/seatLayout.js";
 
@@ -21,13 +22,19 @@ export const createScreen = catchAsync(async (req, res) => {
   });
 });
 
+// Filters: ?cinema=<id>
 export const getScreens = catchAsync(async (req, res) => {
-  const screens = await Screen.find().populate("cinema");
-  res.json({
-    status: "success",
-    results: screens.length,
-    data: { screens },
+  const pagination = getPagination(req.query);
+  const filter = buildFilter({
+    cinema: idFilter(req.query, "cinema"),
   });
+  const query = Screen.find(filter)
+    .sort({ cinema: 1, screenNumber: 1, _id: 1 })
+    .skip(pagination.skip)
+    .limit(pagination.limit)
+    .populate("cinema");
+
+  await sendPage(res, "screens", query, await Screen.countDocuments(filter), pagination);
 });
 
 export const getScreenById = catchAsync(async (req, res) => {

@@ -2,6 +2,7 @@ import Cinema from "../models/cinema.js";
 import Screen from "../models/screens.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { getPagination, sendPage } from "../utils/listQuery.js";
 import { deleteShowtimesWhere } from "../utils/cascade.js";
 
 export const createCinema = catchAsync(async (req, res) => {
@@ -13,12 +14,13 @@ export const createCinema = catchAsync(async (req, res) => {
 });
 
 export const getCinemas = catchAsync(async (req, res) => {
-  const cinemas = await Cinema.find();
-  res.json({
-    status: "success",
-    results: cinemas.length,
-    data: { cinemas },
-  });
+  const pagination = getPagination(req.query);
+  const query = Cinema.find()
+    .sort({ name: 1, _id: 1 })
+    .skip(pagination.skip)
+    .limit(pagination.limit);
+
+  await sendPage(res, "cinemas", query, await Cinema.countDocuments(), pagination);
 });
 
 export const getCinemaById = catchAsync(async (req, res) => {

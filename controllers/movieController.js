@@ -1,6 +1,7 @@
-import Movie from "../models/movies.js";
+import Movie, { allowedGenres } from "../models/movies.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { buildFilter, enumFilter, getPagination, sendPage } from "../utils/listQuery.js";
 import { deleteShowtimesWhere } from "../utils/cascade.js";
 
 export const createMovie = catchAsync(async (req, res) => {
@@ -11,13 +12,18 @@ export const createMovie = catchAsync(async (req, res) => {
   });
 });
 
+// Filters: ?genre=Drama
 export const getMovies = catchAsync(async (req, res) => {
-  const movies = await Movie.find();
-  res.json({
-    status: "success",
-    results: movies.length,
-    data: { movies },
+  const pagination = getPagination(req.query);
+  const filter = buildFilter({
+    genre: enumFilter(req.query, "genre", allowedGenres),
   });
+  const query = Movie.find(filter)
+    .sort({ title: 1, _id: 1 })
+    .skip(pagination.skip)
+    .limit(pagination.limit);
+
+  await sendPage(res, "movies", query, await Movie.countDocuments(filter), pagination);
 });
 
 export const getMovieById = catchAsync(async (req, res) => {

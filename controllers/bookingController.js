@@ -2,6 +2,7 @@ import Booking from "../models/Booking.js";
 import Showtime from "../models/showTime.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { buildFilter, enumFilter, getPagination, idFilter, sendPage } from "../utils/listQuery.js";
 import { assertSeatsFit } from "../utils/seatLayout.js";
 
 // A booking holds its seats on its showtime unless it is cancelled
@@ -92,17 +93,26 @@ export const createBooking = catchAsync(async (req, res) => {
   });
 });
 
+// Filters: ?showtime=<id>&status=confirmed. Newest first.
 export const getBookings = catchAsync(async (req, res) => {
-  const bookings = await Booking.find(accessFilter(req)).populate({
-    path: "showtime",
-    populate: [{ path: "movie" }, { path: "screen" }],
-  });
+  const pagination = getPagination(req.query);
+  const filter = {
+    ...accessFilter(req),
+    ...buildFilter({
+      showtime: idFilter(req.query, "showtime"),
+      status: enumFilter(req.query, "status", ["pending", "confirmed", "cancelled"]),
+    }),
+  };
+  const query = Booking.find(filter)
+    .sort({ createdAt: -1, _id: -1 })
+    .skip(pagination.skip)
+    .limit(pagination.limit)
+    .populate({
+      path: "showtime",
+      populate: [{ path: "movie" }, { path: "screen" }],
+    });
 
-  res.json({
-    status: "success",
-    results: bookings.length,
-    data: { bookings },
-  });
+  await sendPage(res, "bookings", query, await Booking.countDocuments(filter), pagination);
 });
 
 export const getBookingById = catchAsync(async (req, res) => {

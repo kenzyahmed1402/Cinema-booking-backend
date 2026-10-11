@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 // Upper limit so showtime overlap checks know how far back to look
 export const MAX_MOVIE_MINUTES = 600;
 
-const allowedGenres = [
+export const allowedGenres = [
   "Action",
   "Comedy",
   "Drama",

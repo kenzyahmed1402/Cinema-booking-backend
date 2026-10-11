@@ -1,16 +1,5 @@
 import validateRequest from "../middlewares/validateRequest.js";
-import { MAX_MOVIE_MINUTES } from "../models/movies.js";
-
-const allowedGenres = [
-  "Action",
-  "Comedy",
-  "Drama",
-  "Horror",
-  "Sci-Fi",
-  "Romance",
-  "Animation",
-  "Thriller",
-];
+import { MAX_MOVIE_MINUTES, allowedGenres } from "../models/movies.js";
 
 const movieSchema = {
   title: { required: true, type: "string" },

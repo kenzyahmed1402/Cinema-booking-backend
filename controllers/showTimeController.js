@@ -3,6 +3,7 @@ import Movie, { MAX_MOVIE_MINUTES } from "../models/movies.js";
 import Screen from "../models/screens.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { buildFilter, dayFilter, getPagination, idFilter, sendPage } from "../utils/listQuery.js";
 import { deleteShowtimesWhere } from "../utils/cascade.js";
 import { assertSeatsFit } from "../utils/seatLayout.js";
 
@@ -70,15 +71,22 @@ export const createShowtime = catchAsync(async (req, res) => {
   });
 });
 
+// Filters: ?movie=<id>&screen=<id>&date=2030-03-01 (a UTC day)
 export const getShowtimes = catchAsync(async (req, res) => {
-  const showtimes = await Showtime.find()
+  const pagination = getPagination(req.query);
+  const filter = buildFilter({
+    movie: idFilter(req.query, "movie"),
+    screen: idFilter(req.query, "screen"),
+    startTime: dayFilter(req.query, "date"),
+  });
+  const query = Showtime.find(filter)
+    .sort({ startTime: 1, _id: 1 })
+    .skip(pagination.skip)
+    .limit(pagination.limit)
     .populate("movie")
     .populate("screen");
-  res.json({
-    status: "success",
-    results: showtimes.length,
-    data: { showtimes },
-  });
+
+  await sendPage(res, "showtimes", query, await Showtime.countDocuments(filter), pagination);
 });
 
 export const getShowtimeById = catchAsync(async (req, res) => {
