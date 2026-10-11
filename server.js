@@ -11,7 +11,6 @@ import authRouter from "./routes/authRouter.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import AppError from "./utils/AppError.js";
 
-connectDB();
 const app = express();
 app.use(express.json());
 app.use('/movies',MoviesRouter);
@@ -29,9 +28,9 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5050;
 
+// Connect to the database before accepting requests
+await connectDB();
+
 app.listen(PORT , ()=>{
-    console.log("Server is running");
+    console.log(`Server running on port ${PORT}`);
 });
-
-
-
