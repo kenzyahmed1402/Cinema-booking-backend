@@ -159,8 +159,8 @@ npm test
 
 | Variable          | Required    | Default            | Description                                                                 |
 | ----------------- | ----------- | ------------------ | --------------------------------------------------------------------------- |
-| `MONGO_URI`       | Yes         | —                  | MongoDB connection string. The process exits if the connection fails.       |
-| `JWT_SECRET`      | Yes         | —                  | Secret used to sign login tokens. Keep it private.                          |
+| `MONGO_URI`       | Yes         | —                  | MongoDB connection string. The server won't start without it, and exits if the connection fails. |
+| `JWT_SECRET`      | Yes         | —                  | Secret used to sign login tokens, at least 32 characters. Keep it private. The server won't start without it. |
 | `PORT`            | No          | `5050`             | HTTP port.                                                                  |
 | `JWT_EXPIRES_IN`  | No          | `7d`               | How long a login token stays valid.                                         |
 | `NODE_ENV`        | No          | —                  | Set to `development` locally to get stack traces in error responses. Anything else, including unset, gives safe responses (see [Error Handling](#error-handling)). |
