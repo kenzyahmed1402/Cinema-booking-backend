@@ -21,8 +21,8 @@ const bookingSchema = {
 // Admins can change any of these on any booking
 const bookingUpdateSchema = {
   showtime: { required: true, type: "ObjectId" },
-  customerName: { required: true, type: "string" },
-  customerEmail: { required: true, type: "email" },
+  customerName: { required: true, type: "string", maxLength: 100 },
+  customerEmail: { required: true, type: "email", maxLength: 254 },
   seats: seatsRule,
   status: { type: "string", enum: ["pending", "confirmed", "cancelled"] },
 };

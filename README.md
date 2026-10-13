@@ -207,8 +207,8 @@ All documents have `createdAt` / `updatedAt` timestamps.
 | Field      | Type   | Rules                                                  |
 | ---------- | ------ | ------------------------------------------------------ |
 | `name`     | String | required, max 100 chars                                |
-| `email`    | String | required, unique, valid email, stored lowercase        |
-| `password` | String | required, min 8 chars, hashed, never returned          |
+| `email`    | String | required, unique, valid email, max 254 chars, stored lowercase |
+| `password` | String | required, 8 chars to 72 bytes, hashed, never returned  |
 | `role`     | String | `CUSTOMER` (default) or `ADMIN`                        |
 
 ### Cinema

@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
+      maxlength: [254, 'Email cannot exceed 254 characters'],
       match: [
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
         'Please provide a valid email address',
@@ -24,6 +25,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Password is required'],
       minlength: [8, 'Password must be at least 8 characters'],
+      // bcrypt only uses the first 72 bytes of a password
+      validate: {
+        validator: (value) => Buffer.byteLength(value) <= 72,
+        message: 'Password cannot exceed 72 bytes',
+      },
       select: false,
     },
     role: {

@@ -26,6 +26,7 @@ const bookingSchema = new mongoose.Schema(
       required: [true, 'Customer email is required'],
       trim: true,
       lowercase: true,
+      maxlength: [254, 'Customer email cannot exceed 254 characters'],
       match: [
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
         'Please provide a valid email address',

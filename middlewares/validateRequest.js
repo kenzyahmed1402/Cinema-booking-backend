@@ -54,12 +54,19 @@ const validateField = (field, value, rules, partial) => {
     errors.push(`${field} must be at most ${rules.max}`);
   }
 
+  const unit = typeof value === "string" ? "characters" : "items";
+
   if (rules.minLength !== undefined && value.length < rules.minLength) {
-    errors.push(`${field} must have at least ${rules.minLength} items`);
+    errors.push(`${field} must have at least ${rules.minLength} ${unit}`);
   }
 
   if (rules.maxLength !== undefined && value.length > rules.maxLength) {
-    errors.push(`${field} must have at most ${rules.maxLength} items`);
+    errors.push(`${field} must have at most ${rules.maxLength} ${unit}`);
+  }
+
+  // Byte length, e.g. for passwords: bcrypt ignores everything after 72 bytes
+  if (rules.maxBytes !== undefined && typeof value === "string" && Buffer.byteLength(value) > rules.maxBytes) {
+    errors.push(`${field} is too long (at most ${rules.maxBytes} bytes)`);
   }
 
   if (rules.pattern && !rules.pattern.test(value)) {
