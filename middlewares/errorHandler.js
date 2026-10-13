@@ -1,11 +1,11 @@
 import AppError from '../utils/AppError.js';
 
-const sendErrorDev = (err, res) => {
+const sendErrorDev = (err, original, res) => {
   res.status(err.statusCode || 500).json({
     status: err.status || 'error',
     message: err.message,
-    error: err,
-    stack: err.stack,
+    error: original,
+    stack: original.stack,
   });
 };
 
@@ -36,25 +36,46 @@ const handleValidationErrorDB = (err) => {
 };
 
 const handleDuplicateFieldDB = (err) => {
-  const value = err.errmsg.match(/"([^"]*)"/)?.[0] || 'value';
-  const message = `Duplicate field value: ${value}. Please use another value.`;
+  const fields = Object.keys(err.keyValue ?? {});
+  const values = Object.values(err.keyValue ?? {}).map((value) =>
+    value instanceof Date ? value.toISOString() : value
+  );
+  const message = fields.length
+    ? `Duplicate value for ${fields.join(', ')}: ${values.join(', ')}. Please use another value.`
+    : 'Duplicate field value. Please use another value.';
   return new AppError(message, 409);
 };
 
+const handleJWTError = () =>
+  new AppError('Invalid token. Please log in again.', 401);
+
+const handleJWTExpiredError = () =>
+  new AppError('Your token has expired. Please log in again.', 401);
+
+const handleBadJSON = () =>
+  new AppError('Request body is not valid JSON', 400);
+
+// Turns known library errors into AppErrors with the right status code.
+// Checks the original error: Mongoose keeps `name` on the prototype, so a
+// spread copy ({ ...err }) loses it and these checks would never match.
+const normalizeError = (err) => {
+  if (err instanceof AppError) return err;
+  if (err.name === 'CastError') return handleCastErrorDB(err);
+  if (err.name === 'ValidationError') return handleValidationErrorDB(err);
+  if (err.code === 11000) return handleDuplicateFieldDB(err);
+  if (err.name === 'TokenExpiredError') return handleJWTExpiredError();
+  if (err.name === 'JsonWebTokenError') return handleJWTError();
+  if (err.type === 'entity.parse.failed') return handleBadJSON();
+  return err;
+};
+
 const errorHandler = (err, req, res, next) => {
-  err.statusCode = err.statusCode || 500;
-  err.status = err.status || 'error';
+  const error = normalizeError(err);
 
   if (process.env.NODE_ENV === 'production') {
-    let error = { ...err, message: err.message };
-
-    if (error.name === 'CastError') error = handleCastErrorDB(error);
-    if (error.name === 'ValidationError') error = handleValidationErrorDB(error);
-    if (error.code === 11000) error = handleDuplicateFieldDB(error);
-
     sendErrorProd(error, res);
   } else {
-    sendErrorDev(err, res);
+    sendErrorDev(error, err, res);
   }
 };
 

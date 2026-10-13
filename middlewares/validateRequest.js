@@ -5,10 +5,17 @@ const isValidEmail = (email) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
-const validateField = (field, value, rules) => {
+const validateField = (field, value, rules, partial) => {
   const errors = [];
 
-  if (rules.required && (value === undefined || value === null || value === "")) {
+  // In partial mode (updates) a missing required field is fine, but it
+  // can't be sent empty, or an update could blank it out
+  if (partial && rules.required && (value === null || value === "")) {
+    errors.push(`${field} cannot be empty`);
+    return errors;
+  }
+
+  if (!partial && rules.required && (value === undefined || value === null || value === "")) {
     errors.push(`${field} is required`);
     return errors;
   }
@@ -65,24 +72,45 @@ const validateField = (field, value, rules) => {
         errors.push(`${field}[${index}] must be a valid ObjectId`);
       } else if (rules.arrayItemType === "string" && typeof item !== "string") {
         errors.push(`${field}[${index}] must be a string`);
+      } else if (rules.arrayItemPattern && !rules.arrayItemPattern.test(item)) {
+        errors.push(`${field}[${index}] has an invalid format`);
       }
     });
+  }
+
+  if (rules.uniqueItems && Array.isArray(value) && new Set(value).size !== value.length) {
+    errors.push(`${field} must not contain duplicates`);
   }
 
   return errors;
 };
 
-const validateRequest = (schema) => {
+// partial: true is for updates - only the fields that were sent are checked
+const validateRequest = (schema, { partial = false } = {}) => {
   return (req, res, next) => {
+    // Express 5 leaves req.body undefined when the request has no body
+    const body = req.body ?? {};
     const errors = [];
 
+    if (partial && !Object.keys(schema).some((field) => body[field] !== undefined)) {
+      return next(new AppError("Provide at least one field to update", 400));
+    }
+
     for (const [field, rules] of Object.entries(schema)) {
-      errors.push(...validateField(field, req.body[field], rules));
+      errors.push(...validateField(field, body[field], rules, partial));
     }
 
     if (errors.length > 0) {
       return next(new AppError(errors.join(". "), 400));
     }
+
+    // Keep only the fields this schema allows, so a request can't set
+    // fields like _id or bookedSeats that the API doesn't accept
+    req.body = Object.fromEntries(
+      Object.keys(schema)
+        .filter((field) => body[field] !== undefined)
+        .map((field) => [field, body[field]])
+    );
 
     next();
   };

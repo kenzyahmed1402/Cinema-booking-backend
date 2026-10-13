@@ -1,6 +1,9 @@
 import mongoose from "mongoose";
 
-const allowedGenres = [
+// Upper limit so showtime overlap checks know how far back to look
+export const MAX_MOVIE_MINUTES = 600;
+
+export const allowedGenres = [
   "Action",
   "Comedy",
   "Drama",
@@ -32,6 +35,7 @@ const movieSchema = new mongoose.Schema(
       type: Number,
       required: [true, "Movie duration is required"],
       min: [1, "Duration must be at least 1 minute"],
+      max: [MAX_MOVIE_MINUTES, `Duration cannot exceed ${MAX_MOVIE_MINUTES} minutes`],
     },
     description: {
       type: String,
