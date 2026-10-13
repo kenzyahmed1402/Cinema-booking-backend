@@ -54,7 +54,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 | Auth       | jsonwebtoken, bcryptjs                            |
 | Security   | helmet, cors, express-rate-limit                  |
 | Config     | dotenv                                            |
-| Dev server | nodemon                                           |
+| Dev server | `node --watch` (built into Node)                  |
 | Testing    | Node test runner, supertest, mongodb-memory-server |
 
 ## Project Structure
@@ -142,7 +142,7 @@ node scripts/seedAdmin.js
 ### Start the server
 
 ```bash
-npm run dev          # with auto-reload (nodemon)
+npm run dev          # with auto-reload (node --watch)
 # or
 npm start            # plain start
 ```
