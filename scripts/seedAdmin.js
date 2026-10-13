@@ -1,7 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
-if (!process.env.ADMIN_PASSWORD) {
-  throw new Error('ADMIN_PASSWORD must be set in .env');
+if ((process.env.ADMIN_PASSWORD ?? '').length < 12) {
+  console.error('ADMIN_PASSWORD must be set in .env and be at least 12 characters.');
+  process.exit(1);
 }
 import connectDB from '../config/db.js';
 import User from '../models/User.js';

@@ -130,7 +130,7 @@ NODE_ENV=development
 JWT_SECRET=<output of: openssl rand -hex 32>
 JWT_EXPIRES_IN=7d
 ADMIN_EMAIL=admin@cinema.com
-ADMIN_PASSWORD=<choose a password, at least 8 characters>
+ADMIN_PASSWORD=<choose a password, at least 12 characters>
 ```
 
 ### Create the admin account (once per database)
@@ -169,7 +169,7 @@ npm test
 | `TRUST_PROXY`     | No          | `0`                | Number of proxies in front of the app when hosted (e.g. `1` on Render/Heroku). |
 | `ADMIN_NAME`      | No          | `Admin User`       | Used by `scripts/seedAdmin.js`.                                             |
 | `ADMIN_EMAIL`     | No          | `admin@cinema.com` | Used by `scripts/seedAdmin.js`.                                             |
-| `ADMIN_PASSWORD`  | For seeding | —                  | Used by `scripts/seedAdmin.js`; the script refuses to run without it.       |
+| `ADMIN_PASSWORD`  | For seeding | —                  | Used by `scripts/seedAdmin.js`; at least 12 characters, or the script refuses to run. |
 
 ## Authentication & Roles
 
