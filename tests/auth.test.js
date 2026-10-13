@@ -94,6 +94,16 @@ describe("tokens and roles", () => {
     }
   });
 
+  it("only accept tokens signed with HS256", async () => {
+    const { user, token } = await createUser();
+    assert.equal(JSON.parse(Buffer.from(token.split(".")[0], "base64url")).alg, "HS256");
+
+    // Same secret, different algorithm: must be rejected
+    const hs512 = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { algorithm: "HS512" });
+    const res = await api.get("/auth/me").set("Authorization", `Bearer ${hs512}`);
+    assert.equal(res.status, 401);
+  });
+
   it("customers get 403 on admin-only actions", async () => {
     const customer = await createUser();
     const res = await api.post("/movies").set(customer.auth).send({ title: "M", genre: "Drama", duration: 90 });
