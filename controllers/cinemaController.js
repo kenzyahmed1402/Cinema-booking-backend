@@ -40,7 +40,7 @@ export const updateCinema = catchAsync(async (req, res) => {
   const cinema = await Cinema.findOneAndUpdate(
     { _id: req.params.id },
     req.body,
-    { new: true, runValidators: true }
+    { returnDocument: "after", runValidators: true }
   );
 
   if (!cinema) {

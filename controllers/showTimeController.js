@@ -148,7 +148,7 @@ export const updateShowtime = catchAsync(async (req, res) => {
   const showtime = await Showtime.findOneAndUpdate(
     { _id: req.params.id },
     req.body,
-    { new: true, runValidators: true }
+    { returnDocument: "after", runValidators: true }
   )
     .populate("movie")
     .populate("screen");

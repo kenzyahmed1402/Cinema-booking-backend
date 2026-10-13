@@ -17,7 +17,7 @@ const reserveSeats = (showtime, seats) =>
   Showtime.findOneAndUpdate(
     { _id: showtime, bookedSeats: { $nin: seats } },
     { $addToSet: { bookedSeats: { $each: seats } } },
-    { new: true }
+    { returnDocument: "after" }
   );
 
 const releaseSeats = (showtime, seats) =>
@@ -195,7 +195,7 @@ export const updateBooking = catchAsync(async (req, res) => {
     booking = await Booking.findOneAndUpdate(
       { _id: req.params.id },
       { ...changes, totalPrice: newTotalPrice },
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     );
 
     if (!booking) {

@@ -43,7 +43,7 @@ export const updateMovie = catchAsync(async (req, res) => {
   const movie = await Movie.findOneAndUpdate(
     { _id: req.params.id },
     req.body,
-    { new: true, runValidators: true }
+    { returnDocument: "after", runValidators: true }
   );
 
   if (!movie) {

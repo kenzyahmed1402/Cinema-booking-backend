@@ -95,7 +95,7 @@ export const updateScreen = catchAsync(async (req, res) => {
   const screen = await Screen.findOneAndUpdate(
     { _id: req.params.id },
     changes,
-    { new: true, runValidators: true }
+    { returnDocument: "after", runValidators: true }
   ).populate("cinema");
 
   if (!screen) {
