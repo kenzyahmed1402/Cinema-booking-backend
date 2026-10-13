@@ -1,11 +1,12 @@
 import validateRequest from "../middlewares/validateRequest.js";
 import AppError from "../utils/AppError.js";
-import { seatPattern } from "../models/Booking.js";
+import { MAX_SEATS, seatPattern } from "../models/Booking.js";
 
 const seatsRule = {
   required: true,
   type: "array",
   minLength: 1,
+  maxLength: MAX_SEATS,
   arrayItemType: "string",
   arrayItemPattern: seatPattern,
   uniqueItems: true,

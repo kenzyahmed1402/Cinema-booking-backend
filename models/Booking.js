@@ -3,6 +3,10 @@ import mongoose from 'mongoose';
 // Row letter + seat number 1-99, no leading zeros (A01 would be a second A1)
 export const seatPattern = /^[A-Z][1-9]\d?$/;
 
+// Most seats in one booking, and most active seats one customer can hold for
+// a showtime (stops one account from booking a whole showing)
+export const MAX_SEATS = 10;
+
 const bookingSchema = new mongoose.Schema(
   {
     user: {

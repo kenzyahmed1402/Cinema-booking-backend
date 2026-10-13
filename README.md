@@ -40,7 +40,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 - **Partial updates** with `PUT`: send only the fields you change
 - **Two validation layers** (request + Mongoose) and request bodies limited to allowed fields
 - **Consistent error responses** with the right status codes (400 / 401 / 403 / 404 / 409 / 429)
-- **Security:** helmet headers, CORS, rate limiting on login/register
+- **Security:** helmet headers, CORS, a general rate limit plus a stricter one on login/register, at most 10 seats per customer per showtime
 - **Automated test suite** (61 tests) against an in-memory MongoDB
 
 ## Tech Stack
@@ -166,6 +166,7 @@ npm test
 | `NODE_ENV`        | No          | —                  | Set to `development` locally to get stack traces in error responses. Anything else, including unset, gives safe responses (see [Error Handling](#error-handling)). |
 | `CORS_ORIGIN`     | No          | any origin         | Comma-separated frontend URLs allowed to call the API from a browser.       |
 | `AUTH_RATE_LIMIT` | No          | `10`               | Failed login/register attempts allowed per IP per 15 minutes.               |
+| `API_RATE_LIMIT`  | No          | `300`              | Requests allowed per IP per 15 minutes across the whole API.                |
 | `TRUST_PROXY`     | No          | `0`                | Number of proxies in front of the app when hosted (e.g. `1` on Render/Heroku). |
 | `ADMIN_NAME`      | No          | `Admin User`       | Used by `scripts/seedAdmin.js`.                                             |
 | `ADMIN_EMAIL`     | No          | `admin@cinema.com` | Used by `scripts/seedAdmin.js`.                                             |
@@ -260,7 +261,7 @@ Example: `rows: 10, seatsPerRow: 12` → seats `A1` to `J12`, capacity 120.
 | `showtime`      | ObjectId | required, ref `Showtime` (must exist)                        |
 | `customerName`  | String   | set by the server from the user's account                    |
 | `customerEmail` | String   | set by the server from the user's account                    |
-| `seats`         | [String] | required, non-empty, no duplicates, codes like `A1` or `B12` (`/^[A-Z][1-9]\d?$/`), must exist on the screen |
+| `seats`         | [String] | required, 1–10 seats, no duplicates, codes like `A1` or `B12` (`/^[A-Z][1-9]\d?$/`), must exist on the screen |
 | `totalPrice`    | Number   | calculated by the server: showtime price × seats, rounded to cents |
 | `status`        | String   | `pending` (always on creation), `confirmed` or `cancelled`   |
 
@@ -350,6 +351,11 @@ A booking holds its seats unless it's cancelled:
 | Move to another showtime (admin)    | moved                                   | recalculated |
 | Change name, email or status only   | unchanged                               | unchanged    |
 | Delete (admin)                      | freed if active                         | —            |
+
+### Seat limits
+
+- At most **10 seats in one booking**.
+- A customer can hold at most **10 active seats per showtime** across all their bookings (`409 You can book at most 10 seats per showtime (you already have 8)`). Cancelled bookings don't count. Admins are exempt, e.g. for group bookings.
 
 ### Screens and seats
 
@@ -451,7 +457,7 @@ Common status codes:
 | `403` | Logged in without permission                                                                 |
 | `404` | Resource not found (including someone else's booking), unknown route                         |
 | `409` | Seat already booked, duplicate email / screen number / showtime slot, overlapping showtime, delete blocked by active bookings |
-| `429` | Too many failed login/register attempts                                                      |
+| `429` | Too many requests, or too many failed login/register attempts                                |
 | `500` | Unexpected server error                                                                      |
 
 ## Security
@@ -460,7 +466,7 @@ Common status codes:
 | ----------------- | ------------------------------------------------------------------------------------------ | ----------------- |
 | helmet            | Standard security headers; hides `X-Powered-By`                                            | —                 |
 | CORS              | Lets browser frontends call the API; any origin unless restricted                          | `CORS_ORIGIN`     |
-| Rate limiting     | 10 failed login/register attempts per IP per 15 minutes, then `429`; successes don't count | `AUTH_RATE_LIMIT` |
+| Rate limiting     | 300 requests per IP per 15 minutes across the API, and 10 failed login/register attempts per IP per 15 minutes (successes don't count); then `429` | `API_RATE_LIMIT`, `AUTH_RATE_LIMIT` |
 | Proxy awareness   | Real client IPs for rate limiting when hosted behind a proxy                               | `TRUST_PROXY`     |
 | Password hashing  | bcrypt; passwords are never returned                                                       | —                 |
 

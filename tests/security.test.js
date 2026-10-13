@@ -1,5 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import express from "express";
+import supertest from "supertest";
+import { createApiLimiter } from "../middlewares/rateLimit.js";
+import errorHandler from "../middlewares/errorHandler.js";
 import { api, useTestDatabase } from "./helpers.js";
 
 useTestDatabase();
@@ -19,6 +23,24 @@ describe("security", () => {
       .set("Access-Control-Request-Headers", "authorization,content-type");
     assert.equal(res.status, 204);
     assert.equal(res.headers["access-control-allow-origin"], "http://localhost:5173");
+  });
+
+  it("limits all requests per IP with the general rate limit", async () => {
+    const small = express();
+    small.use(createApiLimiter(3));
+    small.get("/ping", (req, res) => res.json({ ok: true }));
+    small.use(errorHandler);
+    const client = supertest(small);
+
+    for (let i = 0; i < 3; i++) assert.equal((await client.get("/ping")).status, 200);
+    const blocked = await client.get("/ping");
+    assert.equal(blocked.status, 429);
+    assert.match(blocked.body.message, /Too many requests/);
+  });
+
+  it("applies the general rate limit to the API", async () => {
+    const res = await api.get("/movies");
+    assert.ok(res.headers["ratelimit-policy"] || res.headers["ratelimit"], "rate limit headers missing");
   });
 
   it("limits failed logins to 10 per 15 minutes; successful logins don't count", async () => {

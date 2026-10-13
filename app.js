@@ -8,6 +8,7 @@ import STRouter from "./routes/showTimeRouter.js";
 import bookingRouter from "./routes/bookingRouter.js";
 import authRouter from "./routes/authRouter.js";
 import errorHandler from "./middlewares/errorHandler.js";
+import { createApiLimiter } from "./middlewares/rateLimit.js";
 import AppError from "./utils/AppError.js";
 
 // The Express app without a database connection or port, so tests can use it
@@ -27,6 +28,9 @@ const allowedOrigins = (process.env.CORS_ORIGIN ?? "")
     .map((origin) => origin.trim())
     .filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
+
+// At most API_RATE_LIMIT requests per IP per 15 minutes across the API
+app.use(createApiLimiter(Number(process.env.API_RATE_LIMIT) || 300));
 
 app.use(express.json());
 app.use('/movies',MoviesRouter);

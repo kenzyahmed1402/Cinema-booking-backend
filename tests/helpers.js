@@ -8,6 +8,8 @@ import supertest from "supertest";
 // when it loads.
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "test-secret";
+// Tests send many requests from one IP; the general limit is tested separately
+process.env.API_RATE_LIMIT = "100000";
 
 const { default: app } = await import("../app.js");
 const { default: User } = await import("../models/User.js");

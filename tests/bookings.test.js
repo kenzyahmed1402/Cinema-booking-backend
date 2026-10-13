@@ -96,6 +96,50 @@ describe("creating a booking", () => {
   });
 });
 
+describe("seat limits", () => {
+  it("allow at most 10 seats in one booking", async () => {
+    const admin = await createUser("ADMIN");
+    const alice = await createUser("CUSTOMER", "Alice");
+    const { showtime } = await createShowtime(admin);
+    const eleven = ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10", "A11"];
+    const res = await api.post("/bookings").set(alice.auth).send({ showtime: showtime._id, seats: eleven });
+    assert.equal(res.status, 400);
+    assert.match(res.body.message, /seats must have at most 10 items/);
+  });
+
+  it("allow a customer at most 10 active seats per showtime, across bookings", async () => {
+    const admin = await createUser("ADMIN");
+    const alice = await createUser("CUSTOMER", "Alice");
+    const { showtime } = await createShowtime(admin);
+    await book(alice, showtime, ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8"]);
+
+    const tooMany = await api.post("/bookings").set(alice.auth).send({ showtime: showtime._id, seats: ["B1", "B2", "B3"] });
+    assert.equal(tooMany.status, 409);
+    assert.match(tooMany.body.message, /at most 10 seats per showtime \(you already have 8\)/);
+
+    const twoMore = await book(alice, showtime, ["B1", "B2"]);
+    assert.equal((await api.post("/bookings").set(alice.auth).send({ showtime: showtime._id, seats: ["C1"] })).status, 409);
+
+    // Cancelled seats don't count
+    await api.put(`/bookings/${twoMore._id}`).set(alice.auth).send({ status: "cancelled" });
+    assert.equal((await api.post("/bookings").set(alice.auth).send({ showtime: showtime._id, seats: ["C1", "C2"] })).status, 201);
+  });
+
+  it("count per showtime, and don't apply to admins", async () => {
+    const admin = await createUser("ADMIN");
+    const alice = await createUser("CUSTOMER", "Alice");
+    const { showtime } = await createShowtime(admin);
+    const { showtime: other } = await createShowtime(admin);
+    const ten = ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10"];
+
+    await book(alice, showtime, ten);
+    await book(alice, other, ten);
+    await book(admin, showtime, ten.map((s) => s.replace("A", "B")));
+    await book(admin, showtime, ten.map((s) => s.replace("A", "C")));
+    assert.equal((await bookedSeats(showtime)).length, 30);
+  });
+});
+
 describe("customers and their own bookings", () => {
   it("only see and open their own bookings", async () => {
     const admin = await createUser("ADMIN");

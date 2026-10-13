@@ -1,4 +1,4 @@
-import Booking from "../models/Booking.js";
+import Booking, { MAX_SEATS } from "../models/Booking.js";
 import Showtime from "../models/showTime.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
@@ -50,6 +50,23 @@ export const createBooking = catchAsync(async (req, res) => {
   assertSeatsFit(showtimeDoc.screen, seats, {
     alreadyBooked: showtimeDoc.bookedSeats.length,
   });
+
+  // Customers can hold at most MAX_SEATS active seats per showtime, across
+  // all their bookings. Admins are exempt, e.g. for group bookings.
+  if (req.user.role !== "ADMIN") {
+    const mine = await Booking.find({
+      user: req.user._id,
+      showtime,
+      status: { $ne: "cancelled" },
+    });
+    const held = mine.reduce((count, booking) => count + booking.seats.length, 0);
+    if (held + seats.length > MAX_SEATS) {
+      throw new AppError(
+        `You can book at most ${MAX_SEATS} seats per showtime (you already have ${held})`,
+        409
+      );
+    }
+  }
 
   const alreadyTaken = seats.filter((seat) =>
     showtimeDoc.bookedSeats.includes(seat)
