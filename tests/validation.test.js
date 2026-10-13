@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import Movie from "../models/movies.js";
 import { api, created, createUser, useTestDatabase } from "./helpers.js";
 
 useTestDatabase();
@@ -67,5 +68,38 @@ describe("error responses", () => {
 
   it("return 404 for unknown routes", async () => {
     assert.equal((await api.get("/nothing-here")).status, 404);
+  });
+
+  it("don't include internal details unless NODE_ENV is development", async () => {
+    const admin = await createUser("ADMIN");
+    const res = await api.post("/movies").set(admin.auth).send({ title: "T".repeat(201), genre: "Drama", duration: 90 });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.stack, undefined);
+    assert.equal(res.body.error, undefined);
+  });
+
+  it("include the stack trace when NODE_ENV is development", async (t) => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+    t.after(() => { process.env.NODE_ENV = previous; });
+
+    const res = await api.get("/movies/not-an-id");
+    assert.equal(res.status, 400);
+    assert.ok(res.body.stack);
+  });
+
+  it("hide the cause of unexpected errors", async (t) => {
+    t.mock.method(Movie, "find", () => {
+      throw new Error("connection string mongodb://secret-host failed");
+    });
+    const res = await api.get("/movies");
+    assert.equal(res.status, 500);
+    assert.equal(res.body.message, "Something went wrong");
+    assert.doesNotMatch(JSON.stringify(res.body), /secret-host/);
+  });
+
+  it("keep 413 for a request body that is too large", async () => {
+    const res = await api.post("/auth/login").send({ email: "a@example.com", password: "x".repeat(200000) });
+    assert.equal(res.status, 413);
   });
 });

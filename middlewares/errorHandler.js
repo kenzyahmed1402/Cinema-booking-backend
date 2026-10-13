@@ -66,16 +66,22 @@ const normalizeError = (err) => {
   if (err.name === 'TokenExpiredError') return handleJWTExpiredError();
   if (err.name === 'JsonWebTokenError') return handleJWTError();
   if (err.type === 'entity.parse.failed') return handleBadJSON();
+  // Other client errors from the body parser, e.g. 413 body too large
+  if (err.expose && err.status >= 400 && err.status < 500) {
+    return new AppError(err.message, err.status);
+  }
   return err;
 };
 
 const errorHandler = (err, req, res, next) => {
   const error = normalizeError(err);
 
-  if (process.env.NODE_ENV === 'production') {
-    sendErrorProd(error, res);
-  } else {
+  // Stack traces and internal error details only in development. Any other
+  // value, including a forgotten NODE_ENV, gets the safe production response.
+  if (process.env.NODE_ENV === 'development') {
     sendErrorDev(error, err, res);
+  } else {
+    sendErrorProd(error, res);
   }
 };
 

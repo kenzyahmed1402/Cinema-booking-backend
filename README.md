@@ -126,6 +126,7 @@ cp .env.example .env
 ```env
 MONGO_URI=mongodb://localhost:27017/cinema-booking
 PORT=5050
+NODE_ENV=development
 JWT_SECRET=<output of: openssl rand -hex 32>
 JWT_EXPIRES_IN=7d
 ADMIN_EMAIL=admin@cinema.com
@@ -162,7 +163,7 @@ npm test
 | `JWT_SECRET`      | Yes         | —                  | Secret used to sign login tokens. Keep it private.                          |
 | `PORT`            | No          | `5050`             | HTTP port.                                                                  |
 | `JWT_EXPIRES_IN`  | No          | `7d`               | How long a login token stays valid.                                         |
-| `NODE_ENV`        | No          | —                  | Set to `production` for sanitized error responses (see [Error Handling](#error-handling)). |
+| `NODE_ENV`        | No          | —                  | Set to `development` locally to get stack traces in error responses. Anything else, including unset, gives safe responses (see [Error Handling](#error-handling)). |
 | `CORS_ORIGIN`     | No          | any origin         | Comma-separated frontend URLs allowed to call the API from a browser.       |
 | `AUTH_RATE_LIMIT` | No          | `10`               | Failed login/register attempts allowed per IP per 15 minutes.               |
 | `TRUST_PROXY`     | No          | `0`                | Number of proxies in front of the app when hosted (e.g. `1` on Render/Heroku). |
@@ -438,8 +439,8 @@ All errors go through `middlewares/errorHandler.js`, which gives the same status
 
 | `NODE_ENV`         | Response                                                                                                    |
 | ------------------ | ----------------------------------------------------------------------------------------------------------- |
-| not `production`   | `status`, `message`, the original `error` object and `stack`, for debugging.                                |
-| `production`       | `status` + `message` only. Unexpected errors are logged and return `500 Something went wrong`.              |
+| `development`      | `status`, `message`, the original `error` object and `stack`, for debugging.                                |
+| anything else / unset | `status` + `message` only. Unexpected errors are logged and return `500 Something went wrong`.           |
 
 Common status codes:
 
