@@ -501,4 +501,4 @@ npm test
 
 ## License
 
-ISC
+[MIT](LICENSE)
