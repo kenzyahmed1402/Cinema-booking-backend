@@ -41,7 +41,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 - **Two validation layers** (request + Mongoose) and request bodies limited to allowed fields
 - **Consistent error responses** with the right status codes (400 / 401 / 403 / 404 / 409 / 429)
 - **Security:** helmet headers, CORS, a general rate limit plus a stricter one on login/register, at most 10 seats per customer per showtime
-- **Automated test suite** (61 tests) against an in-memory MongoDB
+- **Automated test suite** (97 tests) against an in-memory MongoDB
 
 ## Tech Stack
 
@@ -304,6 +304,10 @@ Access: **Public** = no login · **Logged in** = any user · **Admin** = admin o
 | `POST` | `/auth/login`    | Public    | Log in, returns a token             |
 | `GET`  | `/auth/me`       | Logged in | The current user                    |
 
+| Method | Path      | Access | Description                         |
+| ------ | --------- | ------ | ----------------------------------- |
+| `GET`  | `/health` | Public | `200 {"status":"ok","database":"connected"}`, or `503` while the database is unreachable. Not rate limited, for hosting health checks. |
+
 > `PUT` accepts partial updates: send only the fields you want to change.
 
 ### Pagination, filters and sorting
@@ -493,7 +497,7 @@ Common status codes:
 npm test
 ```
 
-61 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
+97 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
 
 ## License
 

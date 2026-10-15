@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import cors from "cors";
 import helmet from "helmet";
 import MoviesRouter from "./routes/movieRouter.js";
@@ -20,6 +21,17 @@ app.set("trust proxy", Number(process.env.TRUST_PROXY) || 0);
 
 // Standard security headers
 app.use(helmet());
+
+// For the hosting platform's health checks. Before CORS and the rate limit,
+// so frequent checks are never blocked. Reports only whether the app and its
+// database connection are up.
+app.get("/health", (req, res) => {
+    const connected = mongoose.connection.readyState === 1;
+    res.status(connected ? 200 : 503).json({
+        status: connected ? "ok" : "error",
+        database: connected ? "connected" : "disconnected",
+    });
+});
 
 // CORS_ORIGIN: comma-separated frontend URLs allowed to call the API from a
 // browser, e.g. http://localhost:5173. Not set: any origin is allowed.
