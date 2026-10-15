@@ -129,6 +129,7 @@ PORT=5050
 NODE_ENV=development
 JWT_SECRET=<output of: openssl rand -hex 32>
 JWT_EXPIRES_IN=7d
+PAYPAL_ENV=sandbox
 ADMIN_EMAIL=admin@cinema.com
 ADMIN_PASSWORD=<choose a password, at least 12 characters>
 ```
@@ -161,6 +162,9 @@ npm test
 | ----------------- | ----------- | ------------------ | --------------------------------------------------------------------------- |
 | `MONGO_URI`       | Yes         | —                  | MongoDB connection string. The server won't start without it, and exits if the connection fails. |
 | `JWT_SECRET`      | Yes         | —                  | Secret used to sign login tokens, at least 32 characters. Keep it private. The server won't start without it. |
+| `PAYPAL_ENV`      | Yes         | —                  | Must be `sandbox`. The server won't start with any other value, so it can never use live PayPal. |
+| `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | For payments | — | Credentials of a PayPal Sandbox REST app. Set both or neither. |
+| `PAYPAL_WEBHOOK_ID` | For payments | —                | ID of the Sandbox webhook, used to verify incoming PayPal events.            |
 | `PORT`            | No          | `5050`             | HTTP port.                                                                  |
 | `JWT_EXPIRES_IN`  | No          | `7d`               | How long a login token stays valid.                                         |
 | `NODE_ENV`        | No          | —                  | Set to `development` locally to get stack traces in error responses. Anything else, including unset, gives safe responses (see [Error Handling](#error-handling)). |

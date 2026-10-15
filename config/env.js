@@ -17,5 +17,15 @@ export const findConfigProblems = (env) => {
         problems.push("JWT_SECRET must be at least 32 characters");
     }
 
+    // Only PayPal Sandbox is allowed, so the app can never take real money
+    if (env.PAYPAL_ENV !== "sandbox") {
+        problems.push("PAYPAL_ENV must be set to sandbox (live PayPal is not supported)");
+    }
+
+    // The credentials stay optional until payments are used, but come as a pair
+    if (Boolean(env.PAYPAL_CLIENT_ID) !== Boolean(env.PAYPAL_CLIENT_SECRET)) {
+        problems.push("PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET must be set together");
+    }
+
     return problems;
 };
