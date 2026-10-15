@@ -86,9 +86,12 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 │   ├── catchAsync.js         # Forwards async errors to the error handler
 │   ├── seatLayout.js         # Seat checks against a screen's layout
 │   ├── cascade.js            # Delete rules for showtimes and their bookings
+│   ├── timezone.js           # Local cinema time <-> UTC conversion
 │   └── listQuery.js          # Pagination, filters, list responses
 ├── scripts/
-│   └── seedAdmin.js          # Creates the first admin account
+│   ├── seedAdmin.js          # Creates the first admin account
+│   ├── seedDemo.js           # Adds the fictional demo catalogue
+│   └── demoCatalogue.js      # The demo cinemas, movies and showtime plan
 └── tests/                    # Automated tests (npm test)
 ```
 
@@ -140,6 +143,15 @@ ADMIN_PASSWORD=<choose a password, at least 12 characters>
 node scripts/seedAdmin.js
 ```
 
+### Add demo data (optional)
+
+```bash
+npm run seed:demo              # adds the catalogue if the database has none
+npm run seed:demo -- --reset   # replaces the catalogue (refused in production or while bookings exist)
+```
+
+Adds a fictional catalogue: 3 cinemas with 2 screens each, 8 original movies, and showtimes for the next 7 days between 13:00 and 22:30 cinema time (`CINEMA_TZ`). Prices are $8–$16 per seat, with an evening surcharge from 17:00. Users and bookings are never changed.
+
 ### Start the server
 
 ```bash
@@ -172,6 +184,7 @@ npm test
 | `AUTH_RATE_LIMIT` | No          | `10`               | Failed login/register attempts allowed per IP per 15 minutes.               |
 | `API_RATE_LIMIT`  | No          | `300`              | Requests allowed per IP per 15 minutes across the whole API.                |
 | `TRUST_PROXY`     | No          | `0`                | Number of proxies in front of the app when hosted (e.g. `1` on Render/Heroku). |
+| `CINEMA_TZ`       | No          | `Africa/Cairo`     | The cinemas' time zone (IANA name), used to plan demo showtimes in local time. |
 | `ADMIN_NAME`      | No          | `Admin User`       | Used by `scripts/seedAdmin.js`.                                             |
 | `ADMIN_EMAIL`     | No          | `admin@cinema.com` | Used by `scripts/seedAdmin.js`.                                             |
 | `ADMIN_PASSWORD`  | For seeding | —                  | Used by `scripts/seedAdmin.js`; at least 12 characters, or the script refuses to run. |
