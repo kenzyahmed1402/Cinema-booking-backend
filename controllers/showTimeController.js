@@ -1,9 +1,19 @@
 import Showtime from "../models/showTime.js";
-import Movie, { MAX_MOVIE_MINUTES } from "../models/movies.js";
+import Movie, { MAX_MOVIE_MINUTES, allowedGenres } from "../models/movies.js";
+import Cinema from "../models/cinema.js";
 import Screen from "../models/screens.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
-import { buildFilter, dayFilter, getPagination, idFilter, sendPage } from "../utils/listQuery.js";
+import {
+  booleanParam,
+  dayFilter,
+  enumFilter,
+  getPagination,
+  idFilter,
+  sendPage,
+  textParam,
+  timeParam,
+} from "../utils/listQuery.js";
 import { deleteShowtimesWhere } from "../utils/cascade.js";
 import { assertSeatsFit } from "../utils/seatLayout.js";
 
@@ -71,20 +81,51 @@ export const createShowtime = catchAsync(async (req, res) => {
   });
 });
 
-// Filters: ?movie=<id>&screen=<id>&date=2030-03-01 (a UTC day)
+// Filters, all optional and combined:
+//   ?movie=<id>  ?screen=<id>  ?cinema=<id>
+//   ?area=downtown   cinemas whose location contains the text
+//   ?genre=Sci-Fi
+//   ?date=2030-03-01 (a UTC day)  ?from=<date-time>  ?to=<date-time>
+//   ?upcoming=true   only showtimes that haven't started
+// Each showtime comes with its movie, screen and the screen's cinema.
 export const getShowtimes = catchAsync(async (req, res) => {
   const pagination = getPagination(req.query);
-  const filter = buildFilter({
-    movie: idFilter(req.query, "movie"),
-    screen: idFilter(req.query, "screen"),
-    startTime: dayFilter(req.query, "date"),
-  });
+  const q = req.query;
+  const conditions = [];
+
+  const movie = idFilter(q, "movie");
+  if (movie) conditions.push({ movie });
+  const screen = idFilter(q, "screen");
+  if (screen) conditions.push({ screen });
+
+  const genre = enumFilter(q, "genre", allowedGenres);
+  if (genre) {
+    conditions.push({ movie: { $in: await Movie.find({ genre }).distinct("_id") } });
+  }
+
+  const cinema = idFilter(q, "cinema");
+  const area = textParam(q, "area");
+  if (cinema || area) {
+    const cinemaFilter = { ...(cinema && { _id: cinema }), ...(area && { location: area }) };
+    const cinemaIds = await Cinema.find(cinemaFilter).distinct("_id");
+    conditions.push({ screen: { $in: await Screen.find({ cinema: { $in: cinemaIds } }).distinct("_id") } });
+  }
+
+  const day = dayFilter(q, "date");
+  if (day) conditions.push({ startTime: day });
+  const from = timeParam(q, "from");
+  if (from) conditions.push({ startTime: { $gte: from } });
+  const to = timeParam(q, "to");
+  if (to) conditions.push({ startTime: { $lt: to } });
+  if (booleanParam(q, "upcoming")) conditions.push({ startTime: { $gt: new Date() } });
+
+  const filter = conditions.length > 0 ? { $and: conditions } : {};
   const query = Showtime.find(filter)
     .sort({ startTime: 1, _id: 1 })
     .skip(pagination.skip)
     .limit(pagination.limit)
     .populate("movie")
-    .populate("screen");
+    .populate({ path: "screen", populate: { path: "cinema" } });
 
   await sendPage(res, "showtimes", query, await Showtime.countDocuments(filter), pagination);
 });
@@ -101,6 +142,31 @@ export const getShowtimeById = catchAsync(async (req, res) => {
   res.json({
     status: "success",
     data: { showtime },
+  });
+});
+
+// GET /showTimes/:id/seats: the seat map for a seat picker. Seats are rows
+// A.. and numbers 1..; `taken` lists the ones that are booked or held.
+export const getSeatMap = catchAsync(async (req, res) => {
+  const showtime = await Showtime.findById(req.params.id).populate("screen");
+  if (!showtime) {
+    throw new AppError("Showtime not found", 404);
+  }
+  const { screen } = showtime;
+  res.json({
+    status: "success",
+    data: {
+      seatMap: {
+        showtime: showtime._id,
+        startTime: showtime.startTime,
+        price: showtime.price,
+        rows: screen?.rows ?? null,
+        seatsPerRow: screen?.seatsPerRow ?? null,
+        capacity: screen?.capacity ?? 0,
+        taken: [...showtime.bookedSeats].sort(),
+        available: Math.max((screen?.capacity ?? 0) - showtime.bookedSeats.length, 0),
+      },
+    },
   });
 });
 

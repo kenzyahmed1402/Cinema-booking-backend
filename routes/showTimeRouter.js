@@ -3,6 +3,7 @@ import {
   createShowtime,
   getShowtimes,
   getShowtimeById,
+  getSeatMap,
   updateShowtime,
   deleteShowtime,
 } from "../controllers/showTimeController.js";
@@ -16,6 +17,7 @@ const STRouter = express.Router();
 // Seat counts never include holds that have already run out
 STRouter.get("/", expireOverdueHolds, getShowtimes);
 STRouter.get("/:id", validateObjectId(), expireOverdueHolds, getShowtimeById);
+STRouter.get("/:id/seats", validateObjectId(), expireOverdueHolds, getSeatMap);
 STRouter.post("/", protect, restrictTo("ADMIN"), validateShowtime, createShowtime);
 STRouter.put("/:id", protect, restrictTo("ADMIN"), validateObjectId(), validateShowtimeUpdate, updateShowtime);
 STRouter.delete("/:id", protect, restrictTo("ADMIN"), validateObjectId(), deleteShowtime);

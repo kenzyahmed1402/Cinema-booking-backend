@@ -61,13 +61,52 @@ const assertAllowedChange = (existing, changes) => {
 const accessFilter = (req) =>
   req.user.role === "ADMIN" ? {} : { user: req.user._id };
 
-export const createBooking = catchAsync(async (req, res) => {
-  const { showtime, seats } = req.body;
-
-  const showtimeDoc = await Showtime.findById(showtime).populate("screen");
+// Loads a showtime that can still be booked: it exists and hasn't started
+const bookableShowtime = async (id) => {
+  const showtimeDoc = await Showtime.findById(id).populate("screen");
   if (!showtimeDoc) {
     throw new AppError("Showtime not found", 404);
   }
+  if (showtimeDoc.startTime <= new Date()) {
+    throw new AppError("This showtime has already started", 409);
+  }
+  return showtimeDoc;
+};
+
+const takenSeats = (showtimeDoc, seats) => seats.filter((seat) => showtimeDoc.bookedSeats.includes(seat));
+
+// POST /bookings/quote { showtime, seats }: what these seats would cost,
+// calculated by the server, without reserving anything
+export const quoteBooking = catchAsync(async (req, res) => {
+  const { showtime, seats } = req.body;
+  const showtimeDoc = await bookableShowtime(showtime);
+  assertSeatsFit(showtimeDoc.screen, seats, { alreadyBooked: showtimeDoc.bookedSeats.length });
+
+  const taken = takenSeats(showtimeDoc, seats);
+  if (taken.length > 0) {
+    throw new AppError(`Seats already booked: ${taken.join(", ")}`, 409);
+  }
+
+  res.json({
+    status: "success",
+    data: {
+      quote: {
+        showtime: showtimeDoc._id,
+        startTime: showtimeDoc.startTime,
+        seats,
+        pricePerSeat: showtimeDoc.price,
+        totalPrice: priceFor(showtimeDoc, seats),
+        totalCents: Math.round(priceFor(showtimeDoc, seats) * 100),
+        currency: "USD",
+      },
+    },
+  });
+});
+
+export const createBooking = catchAsync(async (req, res) => {
+  const { showtime, seats } = req.body;
+
+  const showtimeDoc = await bookableShowtime(showtime);
 
   assertSeatsFit(showtimeDoc.screen, seats, {
     alreadyBooked: showtimeDoc.bookedSeats.length,
@@ -90,9 +129,7 @@ export const createBooking = catchAsync(async (req, res) => {
     }
   }
 
-  const alreadyTaken = seats.filter((seat) =>
-    showtimeDoc.bookedSeats.includes(seat)
-  );
+  const alreadyTaken = takenSeats(showtimeDoc, seats);
   if (alreadyTaken.length > 0) {
     throw new AppError(
       `Seats already booked: ${alreadyTaken.join(", ")}`,

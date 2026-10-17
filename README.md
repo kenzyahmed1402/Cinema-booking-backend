@@ -42,7 +42,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 - **Two validation layers** (request + Mongoose) and request bodies limited to allowed fields
 - **Consistent error responses** with the right status codes (400 / 401 / 403 / 404 / 409 / 429)
 - **Security:** helmet headers, CORS, a general rate limit plus a stricter one on login/register, at most 10 seats per customer per showtime
-- **Automated test suite** (132 tests) against an in-memory MongoDB
+- **Automated test suite** (137 tests) against an in-memory MongoDB
 
 ## Tech Stack
 
@@ -337,7 +337,7 @@ Access: **Public** = no login · **Logged in** = any user · **Admin** = admin o
 | Cinemas   | `/cinemas`   | Public             | Admin     | Admin                  | Admin    | —                              |
 | Screens   | `/screens`   | Public             | Admin     | Admin                  | Admin    | `cinema`                       |
 | Movies    | `/movies`    | Public             | Admin     | Admin                  | Admin    | —                              |
-| Showtimes | `/showTimes` | Public             | Admin     | Admin                  | Admin    | `movie`, `screen`              |
+| Showtimes | `/showTimes` | Public             | Admin     | Admin                  | Admin    | `movie`, `screen` → `cinema`   |
 | Bookings  | `/bookings`  | Logged in (own; admin: all) | Logged in | Logged in (customer: cancel own unpaid only) | Admin (not paid bookings) | `showtime` → `movie`, `screen` |
 
 | Method | Path             | Access    | Description                         |
@@ -352,6 +352,8 @@ Access: **Public** = no login · **Logged in** = any user · **Admin** = admin o
 
 | Method | Path                | Access    | Description                                                   |
 | ------ | ------------------- | --------- | ------------------------------------------------------------- |
+| `GET`  | `/showTimes/:id/seats` | Public | Seat map: `rows`, `seatsPerRow`, `capacity`, `taken` seats, `available` count, `price` |
+| `POST` | `/bookings/quote`   | Logged in | Price of seats without reserving them. Body: `showtime`, `seats`. Same checks as booking; answers `totalPrice` and `totalCents` |
 | `POST` | `/payments/orders`  | Logged in | Start PayPal checkout for your own pending booking. Body: `booking` |
 | `POST` | `/payments/capture` | Logged in | Take the payment after you approved it in PayPal. Body: `orderId` |
 | `GET`  | `/payments/:id`     | Logged in | Your own payment (admins: any)                                |
@@ -441,10 +443,12 @@ Every list accepts `?page=` (default `1`) and `?limit=` (default `20`, max `100`
 | `GET /cinemas`   | —                                                         | name                  |
 | `GET /movies`    | `genre`                                                   | title                 |
 | `GET /screens`   | `cinema`                                                  | cinema, screen number |
-| `GET /showTimes` | `movie`, `screen`, `date` (`YYYY-MM-DD`, a UTC day)       | start time            |
+| `GET /showTimes` | `movie`, `screen`, `cinema` (ids); `area` (text in the cinema's location, case-insensitive, matched literally); `genre`; `date` (`YYYY-MM-DD`, a UTC day); `from` / `to` (date-times); `upcoming=true` (not started yet) | start time |
 | `GET /bookings`  | `showtime`, `status`                                      | newest first          |
 
 Example: `GET /showTimes?movie=<id>&date=2030-03-01&limit=10`
+
+Search example, sci-fi in the downtown area still to come: `GET /showTimes?area=downtown&genre=Sci-Fi&upcoming=true`
 
 ### Response format
 
@@ -479,7 +483,7 @@ Error:
 
 `POST /bookings` (body: `showtime`, `seats`):
 
-1. Checks the showtime exists (`404` if not) and that every seat exists on its screen (`400` if not).
+1. Checks the showtime exists (`404` if not), hasn't started yet (`409` if it has), and that every seat exists on its screen (`400` if not).
 2. Rejects any seat already in `showtime.bookedSeats` (`409 Seats already booked: A1, A2`).
 3. Atomically adds the seats to `bookedSeats` only if none of them are taken; a concurrent request that grabbed a seat first gets `409`.
 4. Creates the booking for the logged-in user with status `pending`, a calculated `totalPrice` and a `holdExpiresAt` deadline. If saving fails, the reserved seats are released.
@@ -641,7 +645,7 @@ Common status codes:
 npm test
 ```
 
-132 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
+137 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
 
 ## License
 
