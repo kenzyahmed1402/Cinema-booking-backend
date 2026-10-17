@@ -9,7 +9,7 @@ const REQUEST_TIMEOUT_MS = 15000;
 // Renew the access token a minute before PayPal says it expires
 const TOKEN_MARGIN_MS = 60 * 1000;
 // PayPal order IDs are short upper-case letters and digits
-const ORDER_ID_PATTERN = /^[A-Z0-9]{5,36}$/;
+export const ORDER_ID_PATTERN = /^[A-Z0-9]{5,36}$/;
 
 // An error from PayPal or from reaching it. The message never contains
 // credentials, tokens or request bodies. paypalStatus is PayPal's HTTP
@@ -176,4 +176,10 @@ export const getPayPalClient = () => {
     clientSecret: process.env.PAYPAL_CLIENT_SECRET,
   });
   return defaultClient;
+};
+
+// Replaces the client, so tests can use a fake PayPal. Not reachable from
+// any request.
+export const setPayPalClient = (client) => {
+  defaultClient = client;
 };

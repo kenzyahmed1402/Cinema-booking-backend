@@ -7,6 +7,7 @@ import Booking, {
   holdsSeats,
 } from "../models/Booking.js";
 import Showtime from "../models/showTime.js";
+import Payment from "../models/Payment.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
 import { buildFilter, enumFilter, getPagination, idFilter, sendPage } from "../utils/listQuery.js";
@@ -185,6 +186,11 @@ export const updateBooking = catchAsync(async (req, res) => {
   // Only validated fields; totalPrice isn't one of them, it's calculated below
   const changes = req.body;
   assertAllowedChange(existing, changes);
+
+  // Once checkout has started, the price the customer saw must not change
+  if ((changes.seats || changes.showtime) && (await Payment.exists({ booking: existing._id }))) {
+    throw new AppError("The seats and showtime can't be changed once payment has started", 409);
+  }
 
   const before = heldSeats(existing);
   const after = heldSeats({ ...existing.toObject(), ...changes });
