@@ -19,6 +19,16 @@ export const SEAT_HOLDING_STATUSES = ['pending', 'confirmed', 'needs_review'];
 
 export const holdsSeats = (status) => SEAT_HOLDING_STATUSES.includes(status);
 
+// Bookings with a payment behind them. They are never deleted, and their
+// seats, showtime and price never change.
+export const PAID_STATUSES = ['confirmed', 'needs_review', 'refunded'];
+
+// The only status change the API accepts, for customers and admins alike:
+// cancelling an unpaid booking. Every other status is set by the server
+// itself: confirmed and refunded by the payment flow, expired when a hold
+// runs out, needs_review when a payment doesn't add up.
+export const API_STATUS_CHANGES = { pending: ['cancelled'] };
+
 const bookingSchema = new mongoose.Schema(
   {
     user: {

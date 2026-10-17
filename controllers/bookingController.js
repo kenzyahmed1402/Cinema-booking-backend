@@ -1,4 +1,11 @@
-import Booking, { BOOKING_STATUSES, MAX_SEATS, SEAT_HOLDING_STATUSES, holdsSeats } from "../models/Booking.js";
+import Booking, {
+  API_STATUS_CHANGES,
+  BOOKING_STATUSES,
+  MAX_SEATS,
+  PAID_STATUSES,
+  SEAT_HOLDING_STATUSES,
+  holdsSeats,
+} from "../models/Booking.js";
 import Showtime from "../models/showTime.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
@@ -21,6 +28,30 @@ const priceFor = (showtimeDoc, seats) =>
 
 const sameSeats = (a, b) =>
   a.length === b.length && [...a].sort().join() === [...b].sort().join();
+
+// Refuses (409) changes the booking's current state doesn't allow. Only an
+// unpaid (pending) booking can be cancelled or get other seats or another
+// showtime; a paid booking's seats and price are fixed. Sending the status it
+// already has changes nothing.
+const assertAllowedChange = (existing, changes) => {
+  if (changes.status && changes.status !== existing.status) {
+    const allowed = API_STATUS_CHANGES[existing.status] ?? [];
+    if (!allowed.includes(changes.status)) {
+      throw new AppError(
+        `A ${existing.status} booking can't be changed to ${changes.status}` +
+          (PAID_STATUSES.includes(existing.status) ? "; paid bookings are cancelled with a refund" : ""),
+        409
+      );
+    }
+  }
+
+  if ((changes.seats || changes.showtime) && existing.status !== "pending") {
+    throw new AppError(
+      `The seats and showtime of a ${existing.status} booking can't be changed`,
+      409
+    );
+  }
+};
 
 // Customers can only reach their own bookings; admins can reach all of them.
 // Someone else's booking looks "not found" so its ID isn't confirmed.
@@ -153,6 +184,7 @@ export const updateBooking = catchAsync(async (req, res) => {
 
   // Only validated fields; totalPrice isn't one of them, it's calculated below
   const changes = req.body;
+  assertAllowedChange(existing, changes);
 
   const before = heldSeats(existing);
   const after = heldSeats({ ...existing.toObject(), ...changes });
@@ -199,14 +231,16 @@ export const updateBooking = catchAsync(async (req, res) => {
 
   let booking;
   try {
+    // Only if the status is still the one checked above: a payment or an
+    // expiring hold may have changed it in the meantime
     booking = await Booking.findOneAndUpdate(
-      { _id: req.params.id },
+      { _id: req.params.id, status: existing.status },
       { ...changes, totalPrice: newTotalPrice },
       { returnDocument: "after", runValidators: true }
     );
 
     if (!booking) {
-      throw new AppError("Booking not found", 404);
+      throw new AppError("The booking changed while it was being updated. Please try again.", 409);
     }
   } catch (err) {
     // Undo the reservation so a failed update doesn't hold the new seats
@@ -227,9 +261,18 @@ export const updateBooking = catchAsync(async (req, res) => {
 });
 
 export const deleteBooking = catchAsync(async (req, res) => {
-  const booking = await Booking.findOneAndDelete({ _id: req.params.id });
+  // A paid booking is the record of a payment, so it is never deleted. The
+  // status check is part of the delete, so it can't change in between.
+  const booking = await Booking.findOneAndDelete({
+    _id: req.params.id,
+    status: { $nin: PAID_STATUSES },
+  });
 
   if (!booking) {
+    const paid = await Booking.findById(req.params.id).select("status");
+    if (paid) {
+      throw new AppError(`A ${paid.status} booking can't be deleted: it has a payment`, 409);
+    }
     throw new AppError("Booking not found", 404);
   }
 

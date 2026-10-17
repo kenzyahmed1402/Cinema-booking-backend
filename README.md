@@ -42,7 +42,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 - **Two validation layers** (request + Mongoose) and request bodies limited to allowed fields
 - **Consistent error responses** with the right status codes (400 / 401 / 403 / 404 / 409 / 429)
 - **Security:** helmet headers, CORS, a general rate limit plus a stricter one on login/register, at most 10 seats per customer per showtime
-- **Automated test suite** (107 tests) against an in-memory MongoDB
+- **Automated test suite** (116 tests) against an in-memory MongoDB
 
 ## Tech Stack
 
@@ -197,7 +197,7 @@ npm test
 
 | Role       | How it's created                                         | Can do                                                        |
 | ---------- | -------------------------------------------------------- | ------------------------------------------------------------- |
-| `CUSTOMER` | `POST /auth/register` (a requested role is ignored)      | Browse, book seats, view and cancel **their own** bookings    |
+| `CUSTOMER` | `POST /auth/register` (a requested role is ignored)      | Browse, book seats, view **their own** bookings and cancel unpaid ones    |
 | `ADMIN`    | Only with `node scripts/seedAdmin.js`                    | Everything, including managing all bookings                   |
 
 Register or log in to get a token, then send it with every request that needs a login:
@@ -301,7 +301,7 @@ Access: **Public** = no login · **Logged in** = any user · **Admin** = admin o
 | Screens   | `/screens`   | Public             | Admin     | Admin                  | Admin    | `cinema`                       |
 | Movies    | `/movies`    | Public             | Admin     | Admin                  | Admin    | —                              |
 | Showtimes | `/showTimes` | Public             | Admin     | Admin                  | Admin    | `movie`, `screen`              |
-| Bookings  | `/bookings`  | Logged in (own; admin: all) | Logged in | Logged in (customer: cancel own only) | Admin | `showtime` → `movie`, `screen` |
+| Bookings  | `/bookings`  | Logged in (own; admin: all) | Logged in | Logged in (customer: cancel own unpaid only) | Admin (not paid bookings) | `showtime` → `movie`, `screen` |
 
 | Method | Path             | Access    | Description                         |
 | ------ | ---------------- | --------- | ----------------------------------- |
@@ -384,16 +384,19 @@ A `pending` booking holds its seats for `HOLD_MINUTES` (default 10) so the custo
 | `expired`      | no          | the hold ran out unpaid                              |
 | `refunded`     | no          | paid, then cancelled with a refund                   |
 
-A booking holds its seats while it's `pending`, `confirmed` or `needs_review`:
+### Changing a booking
 
-| Change                              | Seats                                   | Price        |
-| ----------------------------------- | --------------------------------------- | ------------ |
-| Cancel                              | freed                                   | unchanged    |
-| Un-cancel (admin)                   | reserved again (`409` if taken)          | unchanged    |
-| Change seats (admin)                | new reserved, old freed (`409` if taken) | recalculated |
-| Move to another showtime (admin)    | moved                                   | recalculated |
-| Change name, email or status only   | unchanged                               | unchanged    |
-| Delete (admin)                      | freed if active                         | —            |
+The API accepts only one status change: **cancelling an unpaid (`pending`) booking**, by its customer or an admin. Every other status is set by the server itself: `confirmed` and `refunded` by the payment flow, `expired` when a hold runs out, `needs_review` when a payment doesn't add up. A paid booking is cancelled through the refund flow, not with a status change.
+
+| Change                                   | Allowed on                 | Seats                                    | Price        |
+| ---------------------------------------- | -------------------------- | ---------------------------------------- | ------------ |
+| Cancel (customer or admin)               | `pending` only             | freed                                    | unchanged    |
+| Change seats (admin)                     | `pending` only             | new reserved, old freed (`409` if taken) | recalculated |
+| Move to another showtime (admin)         | `pending` only             | moved                                    | recalculated |
+| Change name or email (admin)             | any status                 | unchanged                                | unchanged    |
+| Delete (admin)                           | not `confirmed`, `needs_review` or `refunded` | freed if held             | —            |
+
+Anything else returns `409` and changes nothing, e.g. `409 A confirmed booking can't be changed to cancelled; paid bookings are cancelled with a refund`. Sending the status a booking already has changes nothing. An update only applies if the booking's status is still the one it was checked against, so a cancel can't overwrite a payment or a hold expiring at the same moment (`409`, try again).
 
 ### Seat limits
 
@@ -501,7 +504,7 @@ Common status codes:
 | `401` | Not logged in, invalid or expired token, wrong email or password                             |
 | `403` | Logged in without permission                                                                 |
 | `404` | Resource not found (including someone else's booking), unknown route                         |
-| `409` | Seat already booked, duplicate email / screen number / showtime slot, overlapping showtime, delete blocked by active bookings |
+| `409` | Seat already booked, duplicate email / screen number / showtime slot, overlapping showtime, delete blocked by active bookings, a status change or edit the booking's state doesn't allow, deleting a paid booking |
 | `429` | Too many requests, or too many failed login/register attempts                                |
 | `500` | Unexpected server error                                                                      |
 
@@ -521,7 +524,7 @@ Common status codes:
 npm test
 ```
 
-107 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
+116 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
 
 ## License
 

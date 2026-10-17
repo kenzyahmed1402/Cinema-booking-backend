@@ -209,16 +209,18 @@ describe("admin updates to a booking", () => {
     assert.deepEqual(await bookedSeats(showtime), ["A1", "B1"]);
   });
 
-  it("free seats on cancel and take them back on un-cancel", async () => {
+  it("free seats on cancel, and can't bring a cancelled booking back", async () => {
     const admin = await createUser("ADMIN");
     const { showtime } = await createShowtime(admin);
     const booking = await book(admin, showtime, ["A1"]);
 
     await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ status: "cancelled" });
     assert.deepEqual(await bookedSeats(showtime), []);
-    const res = await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ status: "confirmed" });
-    assert.equal(res.status, 200);
-    assert.deepEqual(await bookedSeats(showtime), ["A1"]);
+    for (const status of ["confirmed", "pending"]) {
+      const res = await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ status });
+      assert.equal(res.status, 400, status);
+    }
+    assert.deepEqual(await bookedSeats(showtime), []);
   });
 
   it("move seats between showtimes and reprice", async () => {
@@ -240,7 +242,7 @@ describe("admin updates to a booking", () => {
     const booking = await book(admin, showtime, ["A1", "A2"]);
     await api.put(`/showTimes/${showtime._id}`).set(admin.auth).send({ price: 15 });
 
-    const res = await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ customerName: "Janet", status: "confirmed" });
+    const res = await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ customerName: "Janet", status: "cancelled" });
     assert.equal(res.status, 200);
     assert.equal(res.body.data.booking.customerName, "Janet");
     assert.equal(res.body.data.booking.totalPrice, 20);

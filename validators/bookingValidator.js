@@ -19,13 +19,15 @@ const bookingSchema = {
   seats: seatsRule,
 };
 
-// Admins can change any of these on any booking
+// Admins can change these. Status can only be set to cancelled: confirmed,
+// refunded and expired are set by the payment flow and hold expiry, never by
+// a request. The controller checks which changes the booking's state allows.
 const bookingUpdateSchema = {
   showtime: { required: true, type: "ObjectId" },
   customerName: { required: true, type: "string", maxLength: 100 },
   customerEmail: { required: true, type: "email", maxLength: 254 },
   seats: seatsRule,
-  status: { type: "string", enum: ["pending", "confirmed", "cancelled"] },
+  status: { type: "string", enum: ["cancelled"] },
 };
 
 // Customers can only cancel their own booking
