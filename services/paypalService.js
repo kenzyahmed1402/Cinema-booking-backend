@@ -8,7 +8,7 @@ export const PAYPAL_CURRENCY = "USD";
 const REQUEST_TIMEOUT_MS = 15000;
 // Renew the access token a minute before PayPal says it expires
 const TOKEN_MARGIN_MS = 60 * 1000;
-// PayPal order IDs are short upper-case letters and digits
+// PayPal order and capture IDs are short upper-case letters and digits
 export const ORDER_ID_PATTERN = /^[A-Z0-9]{5,36}$/;
 
 // An error from PayPal or from reaching it. The message never contains
@@ -23,6 +23,20 @@ export class PayPalError extends Error {
     this.debugId = debugId;
   }
 }
+
+// Turns a PayPal failure into a clear answer without PayPal's internals,
+// which are only logged. A 422 is PayPal refusing (e.g. a declined card);
+// anything else means PayPal couldn't be reached properly.
+export const paypalFailure = (err, refusedMessage) => {
+  if (!(err instanceof PayPalError)) {
+    return err;
+  }
+  console.error(`PayPal request failed: ${err.paypalStatus ?? "no response"} ${err.paypalName ?? ""} debug_id=${err.debugId ?? "-"}`);
+  if (err.paypalStatus === 422) {
+    return new AppError(refusedMessage, 422);
+  }
+  return new AppError("PayPal is not available right now. Please try again.", 502);
+};
 
 // 2500 -> "25.00", the format PayPal expects for amounts
 export const centsToValue = (cents) => {
@@ -163,7 +177,24 @@ export const createPayPalClient = ({
     };
   };
 
-  return { accessToken, createOrder, captureOrder };
+  // Refunds a capture: `amountCents` for a partial refund, or the whole
+  // capture when it's left out. Returns PayPal's refund ID and status.
+  const refundCapture = async (captureId, { amountCents, currency = PAYPAL_CURRENCY, requestId } = {}) => {
+    if (!ORDER_ID_PATTERN.test(String(captureId))) {
+      throw new AppError("Invalid PayPal capture ID", 400);
+    }
+    const refund = await authorized(`/v2/payments/captures/${captureId}/refund`, {
+      requestId,
+      body: amountCents === undefined ? {} : { amount: { currency_code: currency, value: centsToValue(amountCents) } },
+    });
+    return {
+      refundId: refund.id,
+      status: refund.status,
+      amountCents: refund.amount ? valueToCents(refund.amount.value) : amountCents,
+    };
+  };
+
+  return { accessToken, createOrder, captureOrder, refundCapture };
 };
 
 let defaultClient;

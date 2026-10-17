@@ -42,7 +42,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 - **Two validation layers** (request + Mongoose) and request bodies limited to allowed fields
 - **Consistent error responses** with the right status codes (400 / 401 / 403 / 404 / 409 / 429)
 - **Security:** helmet headers, CORS, a general rate limit plus a stricter one on login/register, at most 10 seats per customer per showtime
-- **Automated test suite** (118 tests) against an in-memory MongoDB
+- **Automated test suite** (125 tests) against an in-memory MongoDB
 
 ## Tech Stack
 
@@ -75,7 +75,8 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 │   ├── Booking.js
 │   └── Payment.js            # PayPal order / capture record per booking
 ├── services/
-│   └── paypalService.js      # PayPal Sandbox client (token, create order, capture)
+│   ├── paypalService.js      # PayPal Sandbox client (token, create order, capture, refund)
+│   └── refundService.js      # The one refund routine used by every refund
 ├── controllers/              # Route handlers (business logic), incl. paymentController.js
 ├── routes/                   # Express routers, one per resource, incl. paymentRouter.js
 ├── validators/               # Per-resource request-body schemas, incl. paymentValidator.js
@@ -93,6 +94,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 │   ├── timezone.js           # Local cinema time <-> UTC conversion
 │   ├── showtimeSeats.js      # Atomic seat reserve / release on a showtime
 │   ├── bookingHolds.js       # Hold deadlines and expiry of unpaid bookings
+│   ├── cancellationPolicy.js # Refund percentage by time before the show
 │   └── listQuery.js          # Pagination, filters, list responses
 ├── scripts/
 │   ├── seedAdmin.js          # Creates the first admin account
@@ -303,6 +305,8 @@ One record per PayPal order. Created and updated by the [payment endpoints](#pay
 | `captureId`     | String   | **unique** once set                                          |
 | `amountCents`   | Number   | required, whole cents (`2500` = $25.00)                      |
 | `currency`      | String   | required, 3-letter code, e.g. `USD`                          |
+| `refundId`      | String   | PayPal's refund ID, **unique** once set                      |
+| `refundCents`   | Number   | the amount refunded or being refunded, whole cents           |
 | `status`        | String   | `created`, `captured`, `failed`, `refund_pending`, `refunded` or `needs_review` |
 
 The unique order and capture IDs mean a repeated request or webhook can never record, confirm or refund the same payment twice.
@@ -349,6 +353,9 @@ Access: **Public** = no login · **Logged in** = any user · **Admin** = admin o
 | `POST` | `/payments/orders`  | Logged in | Start PayPal checkout for your own pending booking. Body: `booking` |
 | `POST` | `/payments/capture` | Logged in | Take the payment after you approved it in PayPal. Body: `orderId` |
 | `GET`  | `/payments/:id`     | Logged in | Your own payment (admins: any)                                |
+| `POST` | `/payments/:id/refund` | Admin  | Refund a `needs_review` payment in full                       |
+| `GET`  | `/bookings/:id/cancellation-quote` | Logged in | What cancelling your paid booking refunds right now |
+| `POST` | `/bookings/:id/cancel` | Logged in | Cancel your paid booking with a refund. Body: `{ "confirm": true }` |
 
 See [Payments](#payments) for the rules.
 
@@ -379,9 +386,31 @@ All payments go through the PayPal **Sandbox**. The browser never sends an amoun
 | PayPal declined the payment                        | `created`      | `pending` (retry possible) | `422` |
 | PayPal unreachable                                 | `created`      | `pending`              | `502`  |
 | Capture doesn't match (amount, currency, booking, status) | `needs_review` | `needs_review` (keeps seats) | `409` |
-| Booking cancelled while PayPal was capturing       | `needs_review` | `cancelled`            | `409`  |
+| Booking cancelled while PayPal was capturing       | `refunded` (in full, automatically; `needs_review` if that fails) | `cancelled` | `409` |
 
-`needs_review` means money may have been taken without a valid booking; those payments are refunded by the refund flow.
+`needs_review` means money may have been taken without a valid booking. An admin refunds it in full with `POST /payments/:id/refund`, which also frees the booking's seats if it was held for review.
+
+### Cancelling a paid booking
+
+The policy, in `utils/cancellationPolicy.js`, is the only place the refund rules live:
+
+| Time before the show | Refund                 |
+| -------------------- | ---------------------- |
+| 24 hours or more     | 100%                   |
+| 2 to 24 hours        | 50% (odd cents rounded down) |
+| Less than 2 hours    | can't be cancelled     |
+
+- **`GET /bookings/:id/cancellation-quote`** shows what cancelling would refund right now, calculated by the server: `allowed`, `refundPercent`, `refundCents`, `paidCents`, `currency`, `showStartsAt`, `policy`.
+- **`POST /bookings/:id/cancel { "confirm": true }`** cancels your `confirmed` booking. Without `"confirm": true` it's refused (`400`). The refund is recalculated at that moment, not taken from an earlier quote. An unpaid booking is cancelled with `PUT /bookings/:id { "status": "cancelled" }` instead.
+
+How a refund runs (`services/refundService.js`, shared by every refund):
+
+1. The payment is claimed for the refund (`captured` → `refund_pending`) in one conditional update, so two requests can never refund it twice.
+2. PayPal refunds the capture (partly or fully), with a request ID tied to the capture, so a retry can't pay out twice.
+3. Payment becomes `refunded` once PayPal reports the refund completed; it stays `refund_pending` while PayPal is still processing.
+4. The booking becomes `refunded` and its seats are freed only after PayPal accepted the refund.
+
+If PayPal fails, the payment goes back to `captured`, the booking stays `confirmed` with its seats, and nothing is shown as refunded (`502`, or `422` if PayPal refused).
 
 ### Pagination, filters and sorting
 
@@ -592,7 +621,7 @@ Common status codes:
 npm test
 ```
 
-118 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
+125 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
 
 ## License
 

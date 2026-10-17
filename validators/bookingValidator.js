@@ -35,7 +35,13 @@ const bookingCancelSchema = {
   status: { required: true, type: "string", enum: ["cancelled"] },
 };
 
+// Cancelling a paid booking needs an explicit yes, so it can't happen by accident
+const paidCancelSchema = {
+  confirm: { required: true, type: "boolean", enum: [true] },
+};
+
 export const validateBooking = validateRequest(bookingSchema);
+export const validatePaidCancel = validateRequest(paidCancelSchema);
 export const validateBookingUpdate = validateRequest(bookingUpdateSchema, { partial: true });
 export const validateBookingCancel = validateRequest(bookingCancelSchema);
 

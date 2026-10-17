@@ -14,6 +14,8 @@ import { buildFilter, enumFilter, getPagination, idFilter, sendPage } from "../u
 import { assertSeatsFit } from "../utils/seatLayout.js";
 import { releaseSeats, reserveSeats } from "../utils/showtimeSeats.js";
 import { holdExpiry } from "../utils/bookingHolds.js";
+import { POLICY_TEXT, quoteCancellation } from "../utils/cancellationPolicy.js";
+import { refundPayment } from "../services/refundService.js";
 
 // A booking holds its seats on its showtime unless it is cancelled, expired
 // or refunded
@@ -293,4 +295,66 @@ export const deleteBooking = catchAsync(async (req, res) => {
     status: "success",
     data: null,
   });
+});
+
+// The paid booking (with its showtime) and its captured payment, for the
+// logged-in user, or a clear refusal
+const paidBookingFor = async (req) => {
+  const booking = await Booking.findOne({ _id: req.params.id, ...accessFilter(req) }).populate("showtime");
+  if (!booking) {
+    throw new AppError("Booking not found", 404);
+  }
+  if (booking.status === "pending") {
+    throw new AppError('This booking isn\'t paid; cancel it with { "status": "cancelled" }, nothing is charged', 409);
+  }
+  if (booking.status !== "confirmed") {
+    throw new AppError(`A ${booking.status} booking can't be cancelled`, 409);
+  }
+  const payment = await Payment.findOne({ booking: booking._id, status: "captured" });
+  if (!payment) {
+    throw new AppError("No completed payment was found for this booking", 409);
+  }
+  return { booking, payment };
+};
+
+const quoteFor = (booking, payment) => ({
+  ...quoteCancellation({ startTime: booking.showtime.startTime, paidCents: payment.amountCents }),
+  paidCents: payment.amountCents,
+  currency: payment.currency,
+  showStartsAt: booking.showtime.startTime,
+  policy: POLICY_TEXT,
+});
+
+// GET /bookings/:id/cancellation-quote: what cancelling this paid booking
+// refunds right now, calculated by the server from the policy
+export const getCancellationQuote = catchAsync(async (req, res) => {
+  const { booking, payment } = await paidBookingFor(req);
+  res.json({ status: "success", data: { quote: quoteFor(booking, payment) } });
+});
+
+// POST /bookings/:id/cancel { confirm: true }: cancels a paid booking and
+// refunds what the policy allows at this moment (not what an earlier quote
+// said). The seats are freed only after PayPal accepted the refund.
+export const cancelPaidBooking = catchAsync(async (req, res) => {
+  const { booking, payment } = await paidBookingFor(req);
+  const quote = quoteFor(booking, payment);
+  if (!quote.allowed) {
+    throw new AppError(`This booking can't be cancelled any more: ${quote.reason.toLowerCase()}`, 409);
+  }
+
+  const refunded = await refundPayment(payment, {
+    fromStatus: "captured",
+    refundCents: quote.refundCents === payment.amountCents ? undefined : quote.refundCents,
+  });
+
+  const cancelled = await Booking.findOneAndUpdate(
+    { _id: booking._id, status: "confirmed" },
+    { status: "refunded" },
+    { returnDocument: "after" }
+  );
+  if (cancelled) {
+    await releaseSeats(booking.showtime._id, booking.seats);
+  }
+
+  res.json({ status: "success", data: { booking: cancelled ?? booking, payment: refunded, quote } });
 });

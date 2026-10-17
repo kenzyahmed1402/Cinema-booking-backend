@@ -5,9 +5,11 @@ import {
   getBookings,
   updateBooking,
   deleteBooking,
+  getCancellationQuote,
+  cancelPaidBooking,
 } from "../controllers/bookingController.js";
 import validateObjectId from "../middlewares/validateObjectId.js";
-import { validateBooking, validateBookingUpdateForRole } from "../validators/bookingValidator.js";
+import { validateBooking, validateBookingUpdateForRole, validatePaidCancel } from "../validators/bookingValidator.js";
 import { protect, restrictTo } from "../middlewares/auth.js";
 import { expireOverdueHolds } from "../utils/bookingHolds.js";
 
@@ -24,5 +26,8 @@ bookingRouter.get("/:id", validateObjectId(), getBookingById);
 bookingRouter.post("/", validateBooking, createBooking);
 bookingRouter.put("/:id", validateObjectId(), validateBookingUpdateForRole, updateBooking);
 bookingRouter.delete("/:id", restrictTo("ADMIN"), validateObjectId(), deleteBooking);
+// Paid bookings are cancelled with a refund under the cancellation policy
+bookingRouter.get("/:id/cancellation-quote", validateObjectId(), getCancellationQuote);
+bookingRouter.post("/:id/cancel", validateObjectId(), validatePaidCancel, cancelPaidBooking);
 
 export default bookingRouter;

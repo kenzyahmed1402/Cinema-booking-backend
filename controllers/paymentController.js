@@ -2,7 +2,9 @@ import Booking from "../models/Booking.js";
 import Payment from "../models/Payment.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
-import { PAYPAL_CURRENCY, PayPalError, getPayPalClient } from "../services/paypalService.js";
+import { PAYPAL_CURRENCY, getPayPalClient, paypalFailure } from "../services/paypalService.js";
+import { refundPayment } from "../services/refundService.js";
+import { releaseSeats } from "../utils/showtimeSeats.js";
 
 const MINUTE = 60 * 1000;
 // Time a capture gets to finish: the hold is stretched to at least this long
@@ -15,19 +17,7 @@ const toCents = (dollars) => Math.round(dollars * 100);
 // Someone else's payment looks "not found".
 const accessFilter = (req) => (req.user.role === "ADMIN" ? {} : { user: req.user._id });
 
-// PayPal failures become clear answers without PayPal's internals. A decline
-// (422) can be retried with another payment method; anything else is PayPal
-// being unreachable.
-const paypalFailure = (err) => {
-  if (!(err instanceof PayPalError)) {
-    return err;
-  }
-  console.error(`PayPal request failed: ${err.paypalStatus ?? "no response"} ${err.paypalName ?? ""} debug_id=${err.debugId ?? "-"}`);
-  if (err.paypalStatus === 422) {
-    return new AppError("PayPal could not complete the payment. Please try another payment method.", 422);
-  }
-  return new AppError("PayPal is not available right now. Please try again.", 502);
-};
+const DECLINED = "PayPal could not complete the payment. Please try another payment method.";
 
 const sendPayment = (res, statusCode, payment, booking) =>
   res.status(statusCode).json({
@@ -66,7 +56,7 @@ export const createOrder = catchAsync(async (req, res) => {
       requestId: `order-${booking._id}`,
     });
   } catch (err) {
-    throw paypalFailure(err);
+    throw paypalFailure(err, DECLINED);
   }
 
   try {
@@ -138,7 +128,7 @@ export const capturePayment = catchAsync(async (req, res) => {
       requestId: `capture-${payment.paypalOrderId}`,
     });
   } catch (err) {
-    throw paypalFailure(err);
+    throw paypalFailure(err, DECLINED);
   }
 
   const problems = captureProblems(result, payment);
@@ -172,9 +162,16 @@ export const capturePayment = catchAsync(async (req, res) => {
   );
   if (!booking) {
     // The booking stopped waiting for payment while PayPal was capturing,
-    // e.g. it was cancelled. The money was taken, so it's kept for a refund.
+    // e.g. it was cancelled. The money was taken, so it goes straight back;
+    // if that fails, the payment stays in needs_review for the cinema.
     await Payment.updateOne({ _id: payment._id }, { status: "needs_review" });
-    throw new AppError("The booking changed while the payment was taken. It will be refunded.", 409);
+    try {
+      await refundPayment(captured, { fromStatus: "needs_review" });
+    } catch (err) {
+      console.error(`Automatic refund for order ${payment.paypalOrderId} failed: ${err.message}`);
+      throw new AppError("The booking changed while the payment was taken. It will be refunded.", 409);
+    }
+    throw new AppError("The booking changed while the payment was taken, so the payment was refunded.", 409);
   }
 
   return sendPayment(res, 200, captured, booking);
@@ -187,4 +184,30 @@ export const getPaymentById = catchAsync(async (req, res) => {
     throw new AppError("Payment not found", 404);
   }
   return sendPayment(res, 200, payment);
+});
+
+// POST /payments/:id/refund (admin): refunds a needs_review payment in full,
+// e.g. one PayPal reported differently than expected. Its booking, if still
+// held for review, gives its seats back.
+export const refundPaymentForReview = catchAsync(async (req, res) => {
+  const payment = await Payment.findById(req.params.id);
+  if (!payment) {
+    throw new AppError("Payment not found", 404);
+  }
+  if (payment.status !== "needs_review") {
+    throw new AppError(`Only payments in review are refunded here; this one is ${payment.status}`, 409);
+  }
+
+  const refunded = await refundPayment(payment, { fromStatus: "needs_review" });
+
+  const booking = await Booking.findOneAndUpdate(
+    { _id: payment.booking, status: "needs_review" },
+    { status: "refunded" },
+    { returnDocument: "after" }
+  );
+  if (booking) {
+    await releaseSeats(booking.showtime, booking.seats);
+  }
+
+  return sendPayment(res, 200, refunded, booking ?? (await Booking.findById(payment.booking)));
 });

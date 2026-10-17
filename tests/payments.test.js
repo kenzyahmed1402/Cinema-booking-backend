@@ -32,6 +32,11 @@ const fakePayPal = () => {
       fake.captures += 1;
       return fake.capture(fake.orders.at(-1));
     },
+    refunds: [],
+    refundCapture: async (captureId, options) => {
+      fake.refunds.push({ captureId, ...options });
+      return { refundId: `REFUND${fake.refunds.length}AAAA`, status: "COMPLETED" };
+    },
   };
   return fake;
 };
@@ -132,7 +137,7 @@ describe("paying for a booking", () => {
     }
   });
 
-  it("keeps the money for a refund if the booking is cancelled while PayPal captures", async () => {
+  it("refunds the money if the booking is cancelled while PayPal captures", async () => {
     const { alice, booking } = await setup();
     await order(alice, booking);
     paypal.captureOrder = async () => {
@@ -141,9 +146,12 @@ describe("paying for a booking", () => {
       return paypal.capture(paypal.orders.at(-1));
     };
 
-    assert.equal((await capture(alice, booking)).status, 409);
+    const res = await capture(alice, booking);
+    assert.equal(res.status, 409);
+    assert.match(res.body.message, /was refunded/);
     assert.equal(await statusOf(booking), "cancelled");
-    assert.equal((await Payment.findOne()).status, "needs_review");
+    assert.equal((await Payment.findOne()).status, "refunded");
+    assert.equal(paypal.refunds.length, 1);
   });
 
   it("a declined payment can be retried, and PayPal outages don't change anything", async () => {

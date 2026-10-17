@@ -100,6 +100,26 @@ describe("PayPal client", () => {
     assert.equal(paypal.calls.length, calls);
   });
 
+  it("refunds part of a capture or all of it", async () => {
+    const paypal = fakePayPal({
+      "/v1/oauth2/token": tokenRoute,
+      "/v2/payments/captures/3C679366HH908993F/refund": () => ({
+        status: 201,
+        body: { id: "1JU08902781691411", status: "COMPLETED", amount: { currency_code: "USD", value: "10.00" } },
+      }),
+    });
+    const pp = client(paypal.fetch);
+
+    const partial = await pp.refundCapture("3C679366HH908993F", { amountCents: 1000, requestId: "refund-1" });
+    assert.deepEqual(partial, { refundId: "1JU08902781691411", status: "COMPLETED", amountCents: 1000 });
+    assert.deepEqual(JSON.parse(paypal.calls[1].body), { amount: { currency_code: "USD", value: "10.00" } });
+    assert.equal(paypal.calls[1].headers["PayPal-Request-Id"], "refund-1");
+
+    await pp.refundCapture("3C679366HH908993F");
+    assert.deepEqual(JSON.parse(paypal.calls[2].body), {});
+    await assert.rejects(pp.refundCapture("x/../y"), { statusCode: 400 });
+  });
+
   it("turns PayPal and network failures into errors that contain no secrets", async () => {
     const declined = fakePayPal({
       "/v1/oauth2/token": tokenRoute,

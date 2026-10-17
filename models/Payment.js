@@ -42,6 +42,15 @@ const paymentSchema = new mongoose.Schema(
       uppercase: true,
       match: [/^[A-Z]{3}$/, 'Currency must be a 3-letter code like USD'],
     },
+    // Set once a refund was requested: PayPal's refund ID and the amount
+    refundId: {
+      type: String,
+    },
+    refundCents: {
+      type: Number,
+      min: [1, 'Refund must be at least 1 cent'],
+      validate: { validator: Number.isInteger, message: 'Refund must be whole cents' },
+    },
     status: {
       type: String,
       enum: {
@@ -61,6 +70,11 @@ paymentSchema.index({ booking: 1 });
 paymentSchema.index(
   { captureId: 1 },
   { unique: true, partialFilterExpression: { captureId: { $type: 'string' } } }
+);
+
+paymentSchema.index(
+  { refundId: 1 },
+  { unique: true, partialFilterExpression: { refundId: { $type: 'string' } } }
 );
 
 const Payment = mongoose.model('Payment', paymentSchema);
