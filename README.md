@@ -42,7 +42,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 - **Two validation layers** (request + Mongoose) and request bodies limited to allowed fields
 - **Consistent error responses** with the right status codes (400 / 401 / 403 / 404 / 409 / 429)
 - **Security:** helmet headers, CORS, a general rate limit plus a stricter one on login/register, at most 10 seats per customer per showtime
-- **Automated test suite** (103 tests) against an in-memory MongoDB
+- **Automated test suite** (110 tests) against an in-memory MongoDB
 
 ## Tech Stack
 
@@ -72,7 +72,10 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 │   ├── screens.js
 │   ├── movies.js
 │   ├── showTime.js
-│   └── Booking.js
+│   ├── Booking.js
+│   └── Payment.js            # PayPal order / capture record per booking
+├── services/
+│   └── paypalService.js      # PayPal Sandbox client (token, create order, capture)
 ├── controllers/              # Route handlers (business logic)
 ├── routes/                   # Express routers, one per resource
 ├── validators/               # Per-resource request-body schemas (create + update)
@@ -286,6 +289,33 @@ Example: `rows: 10, seatsPerRow: 12` → seats `A1` to `J12`, capacity 120.
 | `totalPrice`    | Number   | calculated by the server: showtime price × seats, rounded to cents |
 | `status`        | String   | `pending` (always on creation), `confirmed`, `cancelled`, `expired`, `refunded` or `needs_review` |
 | `holdExpiresAt` | Date     | set by the server: when a `pending` booking gives its seats back (creation + `HOLD_MINUTES`) |
+
+### Payment
+
+One record per PayPal order. The payment endpoints that create and use these come next.
+
+| Field           | Type     | Rules                                                        |
+| --------------- | -------- | ------------------------------------------------------------ |
+| `booking`       | ObjectId | required, ref `Booking`                                      |
+| `user`          | ObjectId | required, ref `User`                                         |
+| `paypalOrderId` | String   | required, **unique**                                         |
+| `captureId`     | String   | **unique** once set                                          |
+| `amountCents`   | Number   | required, whole cents (`2500` = $25.00)                      |
+| `currency`      | String   | required, 3-letter code, e.g. `USD`                          |
+| `status`        | String   | `created`, `captured`, `failed`, `refund_pending`, `refunded` or `needs_review` |
+
+The unique order and capture IDs mean a repeated request or webhook can never record, confirm or refund the same payment twice.
+
+### PayPal client
+
+`services/paypalService.js` talks to PayPal from the server only:
+
+- **Sandbox only:** the PayPal address (`https://api-m.sandbox.paypal.com`) is fixed in code, not a setting, and the server refuses to start unless `PAYPAL_ENV=sandbox`.
+- **Access token:** fetched with `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` and reused until a minute before it expires. Without credentials, payment calls answer `503`.
+- **Create order:** for the amount the server calculated, with the booking ID stored on the order.
+- **Capture:** returns what PayPal reports (status, capture ID, amount, currency, payee) for the server to check against the booking. The client itself never marks anything as paid.
+- **Idempotent:** calls can carry a `PayPal-Request-Id`, so repeating one returns the first result instead of charging twice.
+- **No leaks:** errors carry PayPal's status, error name and debug ID only, never credentials, tokens or request bodies. Requests time out after 15 seconds.
 
 ## API Reference
 
@@ -524,7 +554,7 @@ Common status codes:
 npm test
 ```
 
-103 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
+110 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
 
 ## License
 
