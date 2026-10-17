@@ -4,6 +4,7 @@ import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
 import { PAYPAL_CURRENCY, getPayPalClient, paypalFailure } from "../services/paypalService.js";
 import { refundPayment } from "../services/refundService.js";
+import { applyCapture } from "../services/captureService.js";
 import { releaseSeats } from "../utils/showtimeSeats.js";
 
 const MINUTE = 60 * 1000;
@@ -78,20 +79,6 @@ export const createOrder = catchAsync(async (req, res) => {
   }
 });
 
-// What PayPal reported that doesn't match the payment we expected, if anything
-const captureProblems = (result, payment) => {
-  const problems = [];
-  if (result.orderStatus !== "COMPLETED" || result.captureStatus !== "COMPLETED") {
-    problems.push(`status ${result.orderStatus}/${result.captureStatus}`);
-  }
-  if (result.amountCents !== payment.amountCents) problems.push("amount");
-  if (result.currency !== payment.currency) problems.push("currency");
-  if (result.bookingId !== String(payment.booking)) problems.push("booking");
-  const merchantId = process.env.PAYPAL_MERCHANT_ID;
-  if (merchantId && result.payeeMerchantId !== merchantId) problems.push("payee");
-  return problems;
-};
-
 // POST /payments/capture { orderId }: called after the customer approved the
 // payment in PayPal. The booking is confirmed only after PayPal reports a
 // completed capture of exactly the expected amount, currency and booking.
@@ -131,50 +118,17 @@ export const capturePayment = catchAsync(async (req, res) => {
     throw paypalFailure(err, DECLINED);
   }
 
-  const problems = captureProblems(result, payment);
-  if (problems.length > 0) {
-    // Money may have moved, so nothing is released or confirmed: both are
-    // kept for review (and a refund) instead
-    console.error(`PayPal capture for order ${payment.paypalOrderId} needs review: ${problems.join(", ")}`);
-    await Payment.updateOne(
-      { _id: payment._id, status: "created" },
-      { status: "needs_review", ...(result.captureId && { captureId: result.captureId }) }
-    );
-    await Booking.updateOne({ _id: payment.booking, status: "pending" }, { status: "needs_review" });
+  const { outcome, payment: recorded, booking } = await applyCapture(payment, result);
+  if (outcome === "review") {
     throw new AppError("The payment couldn't be verified. It will be checked and refunded if needed.", 409);
   }
-
-  const captured = await Payment.findOneAndUpdate(
-    { _id: payment._id, status: "created" },
-    { status: "captured", captureId: result.captureId },
-    { returnDocument: "after" }
-  );
-  if (!captured) {
-    // A simultaneous capture request got there first
-    const current = await Payment.findById(payment._id);
-    return sendPayment(res, 200, current, await Booking.findById(payment.booking));
-  }
-
-  const booking = await Booking.findOneAndUpdate(
-    { _id: payment.booking, status: "pending" },
-    { status: "confirmed" },
-    { returnDocument: "after" }
-  );
-  if (!booking) {
-    // The booking stopped waiting for payment while PayPal was capturing,
-    // e.g. it was cancelled. The money was taken, so it goes straight back;
-    // if that fails, the payment stays in needs_review for the cinema.
-    await Payment.updateOne({ _id: payment._id }, { status: "needs_review" });
-    try {
-      await refundPayment(captured, { fromStatus: "needs_review" });
-    } catch (err) {
-      console.error(`Automatic refund for order ${payment.paypalOrderId} failed: ${err.message}`);
-      throw new AppError("The booking changed while the payment was taken. It will be refunded.", 409);
-    }
+  if (outcome === "late_refunded") {
     throw new AppError("The booking changed while the payment was taken, so the payment was refunded.", 409);
   }
-
-  return sendPayment(res, 200, captured, booking);
+  if (outcome === "late_review") {
+    throw new AppError("The booking changed while the payment was taken. It will be refunded.", 409);
+  }
+  return sendPayment(res, 200, recorded, booking);
 });
 
 // GET /payments/:id: a payment and its status

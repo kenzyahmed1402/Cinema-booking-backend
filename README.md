@@ -42,7 +42,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 - **Two validation layers** (request + Mongoose) and request bodies limited to allowed fields
 - **Consistent error responses** with the right status codes (400 / 401 / 403 / 404 / 409 / 429)
 - **Security:** helmet headers, CORS, a general rate limit plus a stricter one on login/register, at most 10 seats per customer per showtime
-- **Automated test suite** (125 tests) against an in-memory MongoDB
+- **Automated test suite** (132 tests) against an in-memory MongoDB
 
 ## Tech Stack
 
@@ -73,9 +73,11 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 │   ├── movies.js
 │   ├── showTime.js
 │   ├── Booking.js
-│   └── Payment.js            # PayPal order / capture record per booking
+│   ├── Payment.js            # PayPal order / capture record per booking
+│   └── WebhookEvent.js       # PayPal webhook events already handled
 ├── services/
 │   ├── paypalService.js      # PayPal Sandbox client (token, create order, capture, refund)
+│   ├── captureService.js     # Checks and records a capture (endpoint and webhook)
 │   └── refundService.js      # The one refund routine used by every refund
 ├── controllers/              # Route handlers (business logic), incl. paymentController.js
 ├── routes/                   # Express routers, one per resource, incl. paymentRouter.js
@@ -354,6 +356,7 @@ Access: **Public** = no login · **Logged in** = any user · **Admin** = admin o
 | `POST` | `/payments/capture` | Logged in | Take the payment after you approved it in PayPal. Body: `orderId` |
 | `GET`  | `/payments/:id`     | Logged in | Your own payment (admins: any)                                |
 | `POST` | `/payments/:id/refund` | Admin  | Refund a `needs_review` payment in full                       |
+| `POST` | `/payments/webhook` | PayPal (signature checked) | PayPal's event notifications, see [Webhooks](#paypal-webhooks) |
 | `GET`  | `/bookings/:id/cancellation-quote` | Logged in | What cancelling your paid booking refunds right now |
 | `POST` | `/bookings/:id/cancel` | Logged in | Cancel your paid booking with a refund. Body: `{ "confirm": true }` |
 
@@ -411,6 +414,23 @@ How a refund runs (`services/refundService.js`, shared by every refund):
 4. The booking becomes `refunded` and its seats are freed only after PayPal accepted the refund.
 
 If PayPal fails, the payment goes back to `captured`, the booking stays `confirmed` with its seats, and nothing is shown as refunded (`502`, or `422` if PayPal refused).
+
+### PayPal webhooks
+
+PayPal also reports payment events to `POST /payments/webhook`. They cover what the browser may never report, such as a capture the server took but couldn't record, or a refund PayPal finished later.
+
+- **Verified first:** the endpoint is public because PayPal calls it, so nothing happens until PayPal's own signature-verification API confirms the message came from PayPal for this app's webhook (`PAYPAL_WEBHOOK_ID`). The body is checked exactly as received; a missing signature, invalid JSON or a failed check is refused (`400`). Without `PAYPAL_WEBHOOK_ID` the endpoint answers `503`.
+- **Once only:** each event ID is stored in `WebhookEvent` after it's handled, so a repeated delivery does nothing. An event whose handling failed isn't stored, so PayPal's retry handles it.
+- **Never backwards:** each event only moves a payment on from the state it expects, so late or out-of-order events can't undo anything.
+- **Small:** the body is limited to 64 KB and the general rate limit applies.
+
+| Event                        | Effect                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| `PAYMENT.CAPTURE.COMPLETED`  | Same checks as `POST /payments/capture`; confirms a booking still waiting for it |
+| `PAYMENT.CAPTURE.DENIED`     | A waiting payment becomes `failed`; the booking stays `pending` until its hold runs out |
+| `PAYMENT.CAPTURE.REFUNDED`   | A `refund_pending` payment becomes `refunded`. A refund made outside the app (e.g. in the PayPal dashboard) is recorded and its booking held as `needs_review` |
+| `PAYMENT.CAPTURE.REVERSED`   | Payment and booking become `needs_review` (e.g. a dispute)            |
+| Anything else                | Acknowledged and ignored                                              |
 
 ### Pagination, filters and sorting
 
@@ -621,7 +641,7 @@ Common status codes:
 npm test
 ```
 
-125 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
+132 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
 
 ## License
 

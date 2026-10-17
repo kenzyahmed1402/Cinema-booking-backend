@@ -9,6 +9,7 @@ import STRouter from "./routes/showTimeRouter.js";
 import bookingRouter from "./routes/bookingRouter.js";
 import authRouter from "./routes/authRouter.js";
 import paymentRouter from "./routes/paymentRouter.js";
+import { handlePayPalWebhook } from "./controllers/webhookController.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import { createApiLimiter } from "./middlewares/rateLimit.js";
 import AppError from "./utils/AppError.js";
@@ -44,6 +45,10 @@ app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 
 // At most API_RATE_LIMIT requests per IP per 15 minutes across the API
 app.use(createApiLimiter(Number(process.env.API_RATE_LIMIT) || 300));
+
+// PayPal's webhook needs the body exactly as sent (its signature covers it),
+// so it gets the raw bytes, with a small size limit, before JSON parsing
+app.post("/payments/webhook", express.raw({ type: "application/json", limit: "64kb" }), handlePayPalWebhook);
 
 app.use(express.json());
 app.use('/movies',MoviesRouter);

@@ -120,6 +120,30 @@ describe("PayPal client", () => {
     await assert.rejects(pp.refundCapture("x/../y"), { statusCode: 400 });
   });
 
+  it("asks PayPal to verify a webhook with the event exactly as received", async () => {
+    const paypal = fakePayPal({
+      "/v1/oauth2/token": tokenRoute,
+      "/v1/notifications/verify-webhook-signature": ({ body }) => ({
+        body: { verification_status: JSON.parse(body).transmission_sig === "good" ? "SUCCESS" : "FAILURE" },
+      }),
+    });
+    const pp = client(paypal.fetch);
+    const rawBody = '{"id":"WH-1",  "resource":{"id":"X"}}';
+    const headers = {
+      "paypal-auth-algo": "SHA256withRSA",
+      "paypal-cert-url": "https://api.sandbox.paypal.com/cert",
+      "paypal-transmission-id": "tx-1",
+      "paypal-transmission-sig": "good",
+      "paypal-transmission-time": "2026-10-17T12:00:00Z",
+    };
+
+    assert.equal(await pp.verifyWebhookSignature({ headers, rawBody, webhookId: "WH-ID" }), true);
+    const sent = paypal.calls[1].body;
+    assert.ok(sent.endsWith(`"webhook_event":${rawBody}}`), "the raw body is embedded unchanged");
+    assert.equal(JSON.parse(sent).webhook_id, "WH-ID");
+    assert.equal(await pp.verifyWebhookSignature({ headers: { ...headers, "paypal-transmission-sig": "bad" }, rawBody, webhookId: "WH-ID" }), false);
+  });
+
   it("turns PayPal and network failures into errors that contain no secrets", async () => {
     const declined = fakePayPal({
       "/v1/oauth2/token": tokenRoute,

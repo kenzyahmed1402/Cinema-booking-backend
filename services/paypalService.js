@@ -123,8 +123,9 @@ export const createPayPalClient = ({
   };
 
   // `requestId` makes the call idempotent at PayPal: repeating it with the
-  // same ID returns the first result instead of acting twice
-  const authorized = async (path, { body, requestId }) =>
+  // same ID returns the first result instead of acting twice. `rawJson` sends
+  // an already serialized body as is.
+  const authorized = async (path, { body, rawJson, requestId }) =>
     send(path, {
       method: "POST",
       headers: {
@@ -132,7 +133,7 @@ export const createPayPalClient = ({
         "Content-Type": "application/json",
         ...(requestId && { "PayPal-Request-Id": requestId }),
       },
-      body: JSON.stringify(body ?? {}),
+      body: rawJson ?? JSON.stringify(body ?? {}),
     });
 
   // Creates an order for the amount the server calculated. `bookingId` is
@@ -194,7 +195,22 @@ export const createPayPalClient = ({
     };
   };
 
-  return { accessToken, createOrder, captureOrder, refundCapture };
+  // Asks PayPal whether a webhook message really came from PayPal for this
+  // app's webhook. `rawBody` is the event exactly as received: re-encoding
+  // it could change the bytes the signature was made for. Resolves to true
+  // only for PayPal's "SUCCESS".
+  const verifyWebhookSignature = async ({ headers, rawBody, webhookId }) => {
+    const field = (name) => JSON.stringify(String(headers[name]));
+    const rawJson =
+      `{"auth_algo":${field("paypal-auth-algo")},"cert_url":${field("paypal-cert-url")},` +
+      `"transmission_id":${field("paypal-transmission-id")},"transmission_sig":${field("paypal-transmission-sig")},` +
+      `"transmission_time":${field("paypal-transmission-time")},"webhook_id":${JSON.stringify(String(webhookId))},` +
+      `"webhook_event":${rawBody}}`;
+    const result = await authorized("/v1/notifications/verify-webhook-signature", { rawJson });
+    return result.verification_status === "SUCCESS";
+  };
+
+  return { accessToken, createOrder, captureOrder, refundCapture, verifyWebhookSignature };
 };
 
 let defaultClient;
