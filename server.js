@@ -3,6 +3,7 @@ import "dotenv/config";
 import connectDB from "./config/db.js";
 import { findConfigProblems } from "./config/env.js";
 import app from "./app.js";
+import { startHoldSweeper } from "./utils/bookingHolds.js";
 
 const configProblems = findConfigProblems(process.env);
 if (configProblems.length > 0) {
@@ -15,6 +16,9 @@ const PORT = process.env.PORT || 5050;
 
 // Connect to the database before accepting requests
 await connectDB();
+
+// Gives the seats of unpaid bookings back once their hold runs out
+startHoldSweeper();
 
 app.listen(PORT , ()=>{
     console.log(`Server running on port ${PORT}`);

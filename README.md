@@ -35,13 +35,14 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 - **Server-side pricing:** `totalPrice` = showtime price × number of seats
 - **Seats stay in sync:** cancelling, changing seats or moving a booking frees and reserves seats correctly
 - **No overlapping showtimes** on a screen (movie length + 15-minute break)
+- **Seat holds:** unpaid (`pending`) bookings hold their seats for 10 minutes, then expire and free them
 - **Safe deletes:** blocked while active bookings exist; otherwise dependent records are removed too
 - **Pagination, filters and sorting** on every list endpoint
 - **Partial updates** with `PUT`: send only the fields you change
 - **Two validation layers** (request + Mongoose) and request bodies limited to allowed fields
 - **Consistent error responses** with the right status codes (400 / 401 / 403 / 404 / 409 / 429)
 - **Security:** helmet headers, CORS, a general rate limit plus a stricter one on login/register, at most 10 seats per customer per showtime
-- **Automated test suite** (97 tests) against an in-memory MongoDB
+- **Automated test suite** (107 tests) against an in-memory MongoDB
 
 ## Tech Stack
 
@@ -87,6 +88,8 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 │   ├── seatLayout.js         # Seat checks against a screen's layout
 │   ├── cascade.js            # Delete rules for showtimes and their bookings
 │   ├── timezone.js           # Local cinema time <-> UTC conversion
+│   ├── showtimeSeats.js      # Atomic seat reserve / release on a showtime
+│   ├── bookingHolds.js       # Hold deadlines and expiry of unpaid bookings
 │   └── listQuery.js          # Pagination, filters, list responses
 ├── scripts/
 │   ├── seedAdmin.js          # Creates the first admin account
@@ -182,6 +185,7 @@ npm test
 | `NODE_ENV`        | No          | —                  | Set to `development` locally to get stack traces in error responses. Anything else, including unset, gives safe responses (see [Error Handling](#error-handling)). |
 | `CORS_ORIGIN`     | No          | any origin         | Comma-separated frontend URLs allowed to call the API from a browser.       |
 | `AUTH_RATE_LIMIT` | No          | `10`               | Failed login/register attempts allowed per IP per 15 minutes.               |
+| `HOLD_MINUTES`    | No          | `10`               | How long an unpaid booking holds its seats, 1–60. The server won't start with another value. |
 | `API_RATE_LIMIT`  | No          | `300`              | Requests allowed per IP per 15 minutes across the whole API.                |
 | `TRUST_PROXY`     | No          | `0`                | Number of proxies in front of the app when hosted (e.g. `1` on Render/Heroku). |
 | `CINEMA_TZ`       | No          | `Africa/Cairo`     | The cinemas' time zone (IANA name), used to plan demo showtimes in local time. |
@@ -280,7 +284,8 @@ Example: `rows: 10, seatsPerRow: 12` → seats `A1` to `J12`, capacity 120.
 | `customerEmail` | String   | set by the server from the user's account                    |
 | `seats`         | [String] | required, 1–10 seats, no duplicates, codes like `A1` or `B12` (`/^[A-Z][1-9]\d?$/`), must exist on the screen |
 | `totalPrice`    | Number   | calculated by the server: showtime price × seats, rounded to cents |
-| `status`        | String   | `pending` (always on creation), `confirmed` or `cancelled`   |
+| `status`        | String   | `pending` (always on creation), `confirmed`, `cancelled`, `expired`, `refunded` or `needs_review` |
+| `holdExpiresAt` | Date     | set by the server: when a `pending` booking gives its seats back (creation + `HOLD_MINUTES`) |
 
 ## API Reference
 
@@ -360,9 +365,26 @@ Error:
 1. Checks the showtime exists (`404` if not) and that every seat exists on its screen (`400` if not).
 2. Rejects any seat already in `showtime.bookedSeats` (`409 Seats already booked: A1, A2`).
 3. Atomically adds the seats to `bookedSeats` only if none of them are taken; a concurrent request that grabbed a seat first gets `409`.
-4. Creates the booking for the logged-in user with status `pending` and a calculated `totalPrice`. If saving fails, the reserved seats are released.
+4. Creates the booking for the logged-in user with status `pending`, a calculated `totalPrice` and a `holdExpiresAt` deadline. If saving fails, the reserved seats are released.
 
-A booking holds its seats unless it's cancelled:
+### Seat holds and expiry
+
+A `pending` booking holds its seats for `HOLD_MINUTES` (default 10) so the customer can pay. If it's still `pending` when the hold runs out, it becomes `expired` and its seats are freed for others.
+
+- Overdue holds are expired right before any booking or showtime request and before deletes, so seat counts never include a hold that has run out.
+- The server also expires them in the background every minute.
+- Each booking is switched from `pending` to `expired` with one conditional update, so when several expiry runs happen at the same time the seats are released exactly once.
+
+| Status         | Holds seats | Meaning                                              |
+| -------------- | ----------- | ---------------------------------------------------- |
+| `pending`      | yes         | waiting for payment until `holdExpiresAt`            |
+| `confirmed`    | yes         | paid                                                 |
+| `needs_review` | yes         | something doesn't add up; kept until checked         |
+| `cancelled`    | no          | called off before payment                            |
+| `expired`      | no          | the hold ran out unpaid                              |
+| `refunded`     | no          | paid, then cancelled with a refund                   |
+
+A booking holds its seats while it's `pending`, `confirmed` or `needs_review`:
 
 | Change                              | Seats                                   | Price        |
 | ----------------------------------- | --------------------------------------- | ------------ |
@@ -376,7 +398,7 @@ A booking holds its seats unless it's cancelled:
 ### Seat limits
 
 - At most **10 seats in one booking**.
-- A customer can hold at most **10 active seats per showtime** across all their bookings (`409 You can book at most 10 seats per showtime (you already have 8)`). Cancelled bookings don't count. Admins are exempt, e.g. for group bookings.
+- A customer can hold at most **10 active seats per showtime** across all their bookings (`409 You can book at most 10 seats per showtime (you already have 8)`). Cancelled, expired and refunded bookings don't count. Admins are exempt, e.g. for group bookings.
 
 ### Screens and seats
 
@@ -397,6 +419,8 @@ A showing occupies its screen for the movie's duration plus a **15-minute break*
 | Movie    | any of its showtimes has active bookings       | its showtimes and their cancelled bookings   |
 | Screen   | any of its showtimes has active bookings       | its showtimes and their cancelled bookings   |
 | Cinema   | any showtime on its screens has active bookings | its screens, showtimes and cancelled bookings |
+
+"Active" means a booking that holds seats (`pending`, `confirmed` or `needs_review`); "cancelled" here covers every booking that doesn't (`cancelled`, `expired`, `refunded`). Holds that have run out are expired first, so they never block a delete.
 
 ## Request Examples
 
@@ -497,7 +521,7 @@ Common status codes:
 npm test
 ```
 
-97 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
+107 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
 
 ## License
 

@@ -1,30 +1,18 @@
-import Booking, { MAX_SEATS } from "../models/Booking.js";
+import Booking, { BOOKING_STATUSES, MAX_SEATS, SEAT_HOLDING_STATUSES, holdsSeats } from "../models/Booking.js";
 import Showtime from "../models/showTime.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
 import { buildFilter, enumFilter, getPagination, idFilter, sendPage } from "../utils/listQuery.js";
 import { assertSeatsFit } from "../utils/seatLayout.js";
+import { releaseSeats, reserveSeats } from "../utils/showtimeSeats.js";
+import { holdExpiry } from "../utils/bookingHolds.js";
 
-// A booking holds its seats on its showtime unless it is cancelled
+// A booking holds its seats on its showtime unless it is cancelled, expired
+// or refunded
 const heldSeats = ({ showtime, seats, status }) => ({
   showtime: String(showtime),
-  seats: status === "cancelled" ? [] : seats,
+  seats: holdsSeats(status) ? seats : [],
 });
-
-// Atomically adds the seats to the showtime only if none of them are taken.
-// Resolves to null if the showtime doesn't exist or a seat is already booked.
-const reserveSeats = (showtime, seats) =>
-  Showtime.findOneAndUpdate(
-    { _id: showtime, bookedSeats: { $nin: seats } },
-    { $addToSet: { bookedSeats: { $each: seats } } },
-    { returnDocument: "after" }
-  );
-
-const releaseSeats = (showtime, seats) =>
-  Showtime.updateOne(
-    { _id: showtime },
-    { $pull: { bookedSeats: { $in: seats } } }
-  );
 
 // The server always calculates the price; rounded to cents to avoid
 // floating point leftovers like 0.30000000000000004
@@ -57,7 +45,7 @@ export const createBooking = catchAsync(async (req, res) => {
     const mine = await Booking.find({
       user: req.user._id,
       showtime,
-      status: { $ne: "cancelled" },
+      status: { $in: SEAT_HOLDING_STATUSES },
     });
     const held = mine.reduce((count, booking) => count + booking.seats.length, 0);
     if (held + seats.length > MAX_SEATS) {
@@ -89,13 +77,15 @@ export const createBooking = catchAsync(async (req, res) => {
 
   let booking;
   try {
-    // New bookings always start as pending; only an admin changes the status
+    // New bookings always start as pending and hold their seats until
+    // holdExpiresAt; unpaid by then, they expire and the seats come back
     booking = await Booking.create({
       ...req.body,
       user: req.user._id,
       customerName: req.user.name,
       customerEmail: req.user.email,
       status: "pending",
+      holdExpiresAt: holdExpiry(),
       totalPrice: priceFor(showtimeDoc, seats),
     });
   } catch (err) {
@@ -117,7 +107,7 @@ export const getBookings = catchAsync(async (req, res) => {
     ...accessFilter(req),
     ...buildFilter({
       showtime: idFilter(req.query, "showtime"),
-      status: enumFilter(req.query, "status", ["pending", "confirmed", "cancelled"]),
+      status: enumFilter(req.query, "status", BOOKING_STATUSES),
     }),
   };
   const query = Booking.find(filter)
@@ -243,8 +233,8 @@ export const deleteBooking = catchAsync(async (req, res) => {
     throw new AppError("Booking not found", 404);
   }
 
-  // A cancelled booking already gave its seats back; releasing them again
-  // could free seats that another booking now holds
+  // A cancelled, expired or refunded booking already gave its seats back;
+  // releasing them again could free seats that another booking now holds
   const { showtime, seats } = heldSeats(booking);
   if (seats.length > 0) {
     await releaseSeats(showtime, seats);

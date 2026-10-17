@@ -7,6 +7,18 @@ export const seatPattern = /^[A-Z][1-9]\d?$/;
 // a showtime (stops one account from booking a whole showing)
 export const MAX_SEATS = 10;
 
+// pending: seats held until holdExpiresAt while the customer pays
+// confirmed: paid; expired: the hold ran out unpaid; cancelled: called off
+// refunded: paid, then cancelled with a refund
+// needs_review: something doesn't add up (e.g. paid after the hold ran out)
+export const BOOKING_STATUSES = ['pending', 'confirmed', 'cancelled', 'expired', 'refunded', 'needs_review'];
+
+// Bookings in these states keep their seats on the showtime. needs_review
+// keeps them until someone has looked at it.
+export const SEAT_HOLDING_STATUSES = ['pending', 'confirmed', 'needs_review'];
+
+export const holdsSeats = (status) => SEAT_HOLDING_STATUSES.includes(status);
+
 const bookingSchema = new mongoose.Schema(
   {
     user: {
@@ -59,10 +71,14 @@ const bookingSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ['pending', 'confirmed', 'cancelled'],
-        message: 'Status must be pending, confirmed, or cancelled',
+        values: BOOKING_STATUSES,
+        message: `Status must be one of: ${BOOKING_STATUSES.join(', ')}`,
       },
       default: 'pending',
+    },
+    // When an unpaid (pending) booking gives its seats back
+    holdExpiresAt: {
+      type: Date,
     },
   },
   {
@@ -73,6 +89,8 @@ const bookingSchema = new mongoose.Schema(
 bookingSchema.index({ showtime: 1, status: 1 });
 bookingSchema.index({ customerEmail: 1 });
 bookingSchema.index({ user: 1 });
+// Finding pending bookings whose hold has run out
+bookingSchema.index({ status: 1, holdExpiresAt: 1 });
 
 const Booking = mongoose.model('Booking', bookingSchema);
 

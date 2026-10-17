@@ -22,6 +22,13 @@ export const findConfigProblems = (env) => {
         problems.push("PAYPAL_ENV must be set to sandbox (live PayPal is not supported)");
     }
 
+    if (env.HOLD_MINUTES !== undefined && env.HOLD_MINUTES !== "") {
+        const minutes = Number(env.HOLD_MINUTES);
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 60) {
+            problems.push("HOLD_MINUTES must be a whole number from 1 to 60");
+        }
+    }
+
     // The credentials stay optional until payments are used, but come as a pair
     if (Boolean(env.PAYPAL_CLIENT_ID) !== Boolean(env.PAYPAL_CLIENT_SECRET)) {
         problems.push("PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET must be set together");
