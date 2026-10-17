@@ -419,7 +419,7 @@ curl -s -X POST $API/screens -H "Authorization: Bearer $ADMIN" -H 'Content-Type:
 
 # 4. Movie
 curl -s -X POST $API/movies -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' \
-  -d '{"title":"Inception","genre":"Sci-Fi","duration":148,"releaseDate":"2010-07-16"}'
+  -d '{"title":"Orbit of Ashes","genre":"Sci-Fi","duration":128,"releaseDate":"2026-09-18"}'
 
 # 5. Showtime
 curl -s -X POST $API/showTimes -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' \
