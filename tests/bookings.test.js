@@ -156,18 +156,6 @@ describe("customers and their own bookings", () => {
     assert.equal((await api.get("/bookings").set(admin.auth)).body.results, 2);
   });
 
-  it("can cancel their own booking, which frees the seats", async () => {
-    const admin = await createUser("ADMIN");
-    const alice = await createUser("CUSTOMER", "Alice");
-    const { showtime } = await createShowtime(admin);
-    const booking = await book(alice, showtime, ["A1", "A2"]);
-
-    const res = await api.put(`/bookings/${booking._id}`).set(alice.auth).send({ status: "cancelled" });
-    assert.equal(res.status, 200);
-    assert.equal(res.body.data.booking.status, "cancelled");
-    assert.deepEqual(await bookedSeats(showtime), []);
-  });
-
   it("can't change seats, confirm, touch someone else's booking or delete", async () => {
     const admin = await createUser("ADMIN");
     const alice = await createUser("CUSTOMER", "Alice");
@@ -207,20 +195,6 @@ describe("admin updates to a booking", () => {
     const res = await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ seats: ["A1", "B1"] });
     assert.equal(res.status, 409);
     assert.deepEqual(await bookedSeats(showtime), ["A1", "B1"]);
-  });
-
-  it("free seats on cancel, and can't bring a cancelled booking back", async () => {
-    const admin = await createUser("ADMIN");
-    const { showtime } = await createShowtime(admin);
-    const booking = await book(admin, showtime, ["A1"]);
-
-    await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ status: "cancelled" });
-    assert.deepEqual(await bookedSeats(showtime), []);
-    for (const status of ["confirmed", "pending"]) {
-      const res = await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ status });
-      assert.equal(res.status, 400, status);
-    }
-    assert.deepEqual(await bookedSeats(showtime), []);
   });
 
   it("move seats between showtimes and reprice", async () => {

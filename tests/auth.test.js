@@ -49,28 +49,22 @@ describe("registration limits", () => {
   const register = (overrides) =>
     api.post("/auth/register").send({ name: "Jane", email: "limits@example.com", password: "password123", ...overrides });
 
-  it("rejects emails longer than 254 characters", async () => {
-    const res = await register({ email: `${"a".repeat(250)}@example.com` });
-    assert.equal(res.status, 400);
-    assert.match(res.body.message, /email must have at most 254 characters/);
+  it("rejects emails over 254 characters and passwords under 8 characters", async () => {
+    const email = await register({ email: `${"a".repeat(250)}@example.com` });
+    assert.equal(email.status, 400);
+    assert.match(email.body.message, /email must have at most 254 characters/);
+    const short = await register({ password: "short" });
+    assert.equal(short.status, 400);
+    assert.match(short.body.message, /password must have at least 8 characters/);
   });
 
-  it("accepts passwords up to 72 bytes and rejects longer ones", async () => {
+  it("accepts passwords up to 72 bytes, counting bytes rather than characters", async () => {
     assert.equal((await register({ password: "p".repeat(73) })).status, 400);
-    assert.equal((await register({ password: "p".repeat(72) })).status, 201);
-  });
-
-  it("counts bytes, not characters, for the password limit", async () => {
     // 19 emoji = 19 characters but 76 bytes
-    const res = await register({ password: "\u{1F600}".repeat(19) });
-    assert.equal(res.status, 400);
-    assert.match(res.body.message, /password is too long \(at most 72 bytes\)/);
-  });
-
-  it("describes text length in characters", async () => {
-    const res = await register({ password: "short" });
-    assert.equal(res.status, 400);
-    assert.match(res.body.message, /password must have at least 8 characters/);
+    const emoji = await register({ password: "\u{1F600}".repeat(19) });
+    assert.equal(emoji.status, 400);
+    assert.match(emoji.body.message, /password is too long \(at most 72 bytes\)/);
+    assert.equal((await register({ password: "p".repeat(72) })).status, 201);
   });
 });
 

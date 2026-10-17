@@ -42,7 +42,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 - **Two validation layers** (request + Mongoose) and request bodies limited to allowed fields
 - **Consistent error responses** with the right status codes (400 / 401 / 403 / 404 / 409 / 429)
 - **Security:** helmet headers, CORS, a general rate limit plus a stricter one on login/register, at most 10 seats per customer per showtime
-- **Automated test suite** (116 tests) against an in-memory MongoDB
+- **Automated test suite** (103 tests) against an in-memory MongoDB
 
 ## Tech Stack
 
@@ -524,7 +524,7 @@ Common status codes:
 npm test
 ```
 
-116 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
+103 automated tests (Node's built-in test runner + `supertest`) cover bookings, seat rules, showtime overlaps, screen layouts, validation, errors, authentication and roles, delete rules, pagination and filters, and security. Each test file runs against its own in-memory MongoDB (`mongodb-memory-server`), so tests never touch your real database. The first run downloads a MongoDB binary, which is cached afterwards.
 
 ## License
 

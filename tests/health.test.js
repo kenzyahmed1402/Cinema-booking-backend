@@ -14,15 +14,11 @@ describe("GET /health", () => {
   describe("with a database connection", () => {
     useTestDatabase();
 
-    it("reports ok and nothing else", async () => {
+    it("reports ok and nothing else, outside the general rate limit", async () => {
       const res = await api.get("/health");
       assert.equal(res.status, 200);
       assert.deepEqual(res.body, { status: "ok", database: "connected" });
-    });
-
-    it("is not counted by the general rate limit", async () => {
-      const health = await api.get("/health");
-      assert.equal(health.headers["ratelimit-policy"], undefined);
+      assert.equal(res.headers["ratelimit-policy"], undefined);
       const other = await api.get("/movies");
       assert.ok(other.headers["ratelimit-policy"], "other routes are rate limited");
     });

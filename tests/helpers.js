@@ -2,6 +2,7 @@ import { after, before, beforeEach } from "node:test";
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import supertest from "supertest";
 
 // Test settings. Set before the app loads, because some settings are read
@@ -41,15 +42,24 @@ export const useTestDatabase = () => {
 
 let userCount = 0;
 
+// Hashing with the real cost (12 rounds) takes about 0.4 s per user, which
+// made most of the suite's run time. Test users share one cheap hash of
+// "password123" instead; the real hashing is tested through /auth/register.
+const testPasswordHash = bcrypt.hashSync("password123", 4);
+
 // Creates a user directly in the database and returns it with a login token
 export const createUser = async (role = "CUSTOMER", name = role === "ADMIN" ? "Admin" : "Customer") => {
   userCount += 1;
-  const user = await User.create({
+  const now = new Date();
+  const { insertedId } = await User.collection.insertOne({
     name,
     email: `user${userCount}@example.com`,
-    password: "password123",
+    password: testPasswordHash,
     role,
+    createdAt: now,
+    updatedAt: now,
   });
+  const user = await User.findById(insertedId);
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
   return { user, token, auth: { Authorization: `Bearer ${token}` } };
 };

@@ -4,7 +4,7 @@ import express from "express";
 import supertest from "supertest";
 import { createApiLimiter } from "../middlewares/rateLimit.js";
 import errorHandler from "../middlewares/errorHandler.js";
-import { api, useTestDatabase } from "./helpers.js";
+import { api, createUser, useTestDatabase } from "./helpers.js";
 
 useTestDatabase();
 
@@ -44,8 +44,9 @@ describe("security", () => {
   });
 
   it("limits failed logins to 10 per 15 minutes; successful logins don't count", async () => {
-    await api.post("/auth/register").send({ name: "Jane", email: "jane@example.com", password: "password123" });
-    const login = (password) => api.post("/auth/login").send({ email: "jane@example.com", password });
+    // A test user with a cheap password hash keeps the 16 logins fast
+    const { user } = await createUser();
+    const login = (password) => api.post("/auth/login").send({ email: user.email, password });
 
     for (let i = 0; i < 9; i++) assert.equal((await login("wrong-password")).status, 401);
     for (let i = 0; i < 5; i++) assert.equal((await login("password123")).status, 200);

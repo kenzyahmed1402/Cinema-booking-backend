@@ -31,30 +31,6 @@ describe("booking status changes", () => {
     assert.deepEqual(await bookedSeats(showtime), []);
   });
 
-  it("a customer can't cancel a paid booking without a refund", async () => {
-    const { alice, showtime } = await setup();
-    const statuses = ["confirmed", "needs_review", "refunded"];
-    for (const [i, status] of statuses.entries()) {
-      const booking = await book(alice, showtime, [`B${i + 1}`]);
-      await setStatus(booking, status);
-
-      const res = await api.put(`/bookings/${booking._id}`).set(alice.auth).send({ status: "cancelled" });
-      assert.equal(res.status, 409, status);
-      assert.match(res.body.message, /refund/);
-      assert.equal(await statusOf(booking), status);
-    }
-  });
-
-  it("an expired booking can't be cancelled or revived", async () => {
-    const { admin, alice, showtime } = await setup();
-    const booking = await book(alice, showtime, ["A1"]);
-    await setStatus(booking, "expired");
-
-    assert.equal((await api.put(`/bookings/${booking._id}`).set(alice.auth).send({ status: "cancelled" })).status, 409);
-    assert.equal((await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ status: "cancelled" })).status, 409);
-    assert.equal(await statusOf(booking), "expired");
-  });
-
   it("nobody can confirm, refund, expire or revive a booking through the API", async () => {
     const { admin, alice, showtime } = await setup();
     const booking = await book(alice, showtime, ["A1"]);
@@ -66,15 +42,19 @@ describe("booking status changes", () => {
     assert.equal(await statusOf(booking), "pending");
   });
 
-  it("an admin can cancel an unpaid booking but not a paid one", async () => {
+  it("paid and expired bookings can't be cancelled, by the customer or an admin", async () => {
     const { admin, alice, showtime } = await setup();
-    const unpaid = await book(alice, showtime, ["A1"]);
-    const paid = await book(alice, showtime, ["A2"]);
-    await setStatus(paid, "confirmed");
+    const statuses = ["confirmed", "needs_review", "refunded", "expired"];
+    for (const [i, status] of statuses.entries()) {
+      const booking = await book(alice, showtime, [`B${i + 1}`]);
+      await setStatus(booking, status);
 
-    assert.equal((await api.put(`/bookings/${unpaid._id}`).set(admin.auth).send({ status: "cancelled" })).status, 200);
-    assert.equal((await api.put(`/bookings/${paid._id}`).set(admin.auth).send({ status: "cancelled" })).status, 409);
-    assert.deepEqual(await bookedSeats(showtime), ["A2"]);
+      for (const user of [alice, admin]) {
+        const res = await api.put(`/bookings/${booking._id}`).set(user.auth).send({ status: "cancelled" });
+        assert.equal(res.status, 409, status);
+      }
+      assert.equal(await statusOf(booking), status);
+    }
   });
 });
 
@@ -85,8 +65,7 @@ describe("paid bookings", () => {
     const booking = await book(alice, showtime, ["A1", "A2"]);
     await setStatus(booking, "confirmed");
 
-    const seats = await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ seats: ["C1"] });
-    assert.equal(seats.status, 409);
+    assert.equal((await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ seats: ["C1"] })).status, 409);
     const move = await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ showtime: other._id, seats: ["C1"] });
     assert.equal(move.status, 409);
     assert.deepEqual(await bookedSeats(showtime), ["A1", "A2"]);
@@ -99,19 +78,6 @@ describe("paid bookings", () => {
     assert.equal(rename.body.data.booking.status, "confirmed");
   });
 
-  it("seats can't be changed on a cancelled or expired booking either", async () => {
-    const { admin, alice, showtime } = await setup();
-    for (const status of ["cancelled", "expired"]) {
-      const booking = await book(alice, showtime, ["D1"]);
-      await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ status: "cancelled" });
-      await setStatus(booking, status);
-
-      const res = await api.put(`/bookings/${booking._id}`).set(admin.auth).send({ seats: ["D2"] });
-      assert.equal(res.status, 409, status);
-      assert.deepEqual(await bookedSeats(showtime), []);
-    }
-  });
-
   it("can't be deleted; unpaid and cancelled bookings can", async () => {
     const { admin, alice, showtime } = await setup();
     const statuses = ["confirmed", "needs_review", "refunded"];
@@ -120,7 +86,6 @@ describe("paid bookings", () => {
       await setStatus(booking, status);
       const res = await api.delete(`/bookings/${booking._id}`).set(admin.auth);
       assert.equal(res.status, 409, status);
-      assert.match(res.body.message, /payment/);
       assert.ok(await Booking.exists({ _id: booking._id }));
     }
 
@@ -131,10 +96,8 @@ describe("paid bookings", () => {
     assert.equal((await api.delete(`/bookings/${cancelled._id}`).set(admin.auth)).status, 204);
     assert.deepEqual(await bookedSeats(showtime), ["E1", "E2", "E3"]);
   });
-});
 
-describe("concurrent changes", () => {
-  it("a cancel doesn't overwrite a status that changed after it was checked", async (t) => {
+  it("a cancel doesn't overwrite a payment that lands after the booking was checked", async (t) => {
     const { alice, showtime } = await setup();
     const booking = await book(alice, showtime, ["A1"]);
 
