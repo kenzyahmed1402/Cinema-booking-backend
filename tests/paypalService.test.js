@@ -100,6 +100,40 @@ describe("PayPal client", () => {
     assert.equal(paypal.calls.length, calls);
   });
 
+  it("finds the booking and payee where real PayPal puts them", async () => {
+    // Shaped like the Sandbox answer: the booking reference sits on the
+    // capture, and the payee only appears on the order itself
+    const paypal = fakePayPal({
+      "/v1/oauth2/token": tokenRoute,
+      "/v2/checkout/orders/647812308B624484M/capture": () => ({
+        status: 201,
+        body: {
+          id: "647812308B624484M",
+          status: "COMPLETED",
+          purchase_units: [
+            {
+              reference_id: "booking-1",
+              payments: {
+                captures: [
+                  { id: "3C679366HH908993F", status: "COMPLETED", custom_id: "booking-1", amount: { currency_code: "USD", value: "26.00" } },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+      "/v2/checkout/orders/647812308B624484M": () => ({
+        body: { id: "647812308B624484M", purchase_units: [{ reference_id: "booking-1", custom_id: "booking-1", payee: { merchant_id: "MERCHANT1" } }] },
+      }),
+    });
+
+    const result = await client(paypal.fetch).captureOrder("647812308B624484M");
+    assert.equal(result.bookingId, "booking-1");
+    assert.equal(result.payeeMerchantId, "MERCHANT1");
+    assert.equal(result.amountCents, 2600);
+    assert.equal(paypal.calls[1].headers.Prefer, "return=representation");
+  });
+
   it("refunds part of a capture or all of it", async () => {
     const paypal = fakePayPal({
       "/v1/oauth2/token": tokenRoute,

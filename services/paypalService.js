@@ -125,16 +125,21 @@ export const createPayPalClient = ({
   // `requestId` makes the call idempotent at PayPal: repeating it with the
   // same ID returns the first result instead of acting twice. `rawJson` sends
   // an already serialized body as is.
-  const authorized = async (path, { body, rawJson, requestId }) =>
+  // `fullResponse` asks PayPal for every detail instead of its short answer
+  const authorized = async (path, { body, rawJson, requestId, fullResponse }) =>
     send(path, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${await accessToken()}`,
         "Content-Type": "application/json",
         ...(requestId && { "PayPal-Request-Id": requestId }),
+        ...(fullResponse && { Prefer: "return=representation" }),
       },
       body: rawJson ?? JSON.stringify(body ?? {}),
     });
+
+  const authorizedGet = async (path) =>
+    send(path, { method: "GET", headers: { Authorization: `Bearer ${await accessToken()}` } });
 
   // Creates an order for the amount the server calculated. `bookingId` is
   // stored on the order so a capture or webhook can be matched to it.
@@ -162,19 +167,30 @@ export const createPayPalClient = ({
     if (!ORDER_ID_PATTERN.test(String(orderId))) {
       throw new AppError("Invalid PayPal order ID", 400);
     }
-    const order = await authorized(`/v2/checkout/orders/${orderId}/capture`, { requestId });
+    const order = await authorized(`/v2/checkout/orders/${orderId}/capture`, { requestId, fullResponse: true });
     const unit = order.purchase_units?.[0];
     const capture = unit?.payments?.captures?.[0];
+
+    // PayPal puts the booking reference on the capture itself; the payee may
+    // only be on the order. Anything the capture answer leaves out is read
+    // from the order, so the checks always compare real values.
+    let bookingId = capture?.custom_id ?? unit?.custom_id;
+    let payeeMerchantId = unit?.payee?.merchant_id;
+    if (!bookingId || !payeeMerchantId) {
+      const details = (await authorizedGet(`/v2/checkout/orders/${orderId}`)).purchase_units?.[0];
+      bookingId ??= details?.custom_id ?? details?.reference_id;
+      payeeMerchantId ??= details?.payee?.merchant_id;
+    }
 
     return {
       orderId: order.id,
       orderStatus: order.status,
-      bookingId: unit?.custom_id,
+      bookingId,
       captureId: capture?.id,
       captureStatus: capture?.status,
       amountCents: capture?.amount ? valueToCents(capture.amount.value) : undefined,
       currency: capture?.amount?.currency_code,
-      payeeMerchantId: unit?.payee?.merchant_id,
+      payeeMerchantId,
     };
   };
 
