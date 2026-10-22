@@ -101,6 +101,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 ├── scripts/
 │   ├── seedAdmin.js          # Creates the first admin account
 │   ├── seedDemo.js           # Adds the fictional demo catalogue
+│   ├── seedProduction.js     # Seeds the deployed database from .env.production
 │   └── demoCatalogue.js      # The demo cinemas, movies and showtime plan
 └── tests/                    # Automated tests (npm test)
 ```
@@ -177,6 +178,34 @@ The server connects to MongoDB first, then logs `Server running on port 5050` (o
 ```bash
 npm test
 ```
+
+## Deploying (Render + MongoDB Atlas)
+
+The app runs as a single Render web service with a MongoDB Atlas database.
+
+1. **Atlas:** create a separate database for the deployed app (e.g. `cinemate-prod`) and a database user with *readWrite* on that database only and a long generated password. Under **Network Access**, allow `0.0.0.0/0`: Render's free tier has no fixed IP address, so the password protects the database.
+2. **Render:** **New → Web Service** for this repository, with:
+
+   | Setting           | Value                                  |
+   | ----------------- | -------------------------------------- |
+   | Runtime           | Node (`.node-version` selects Node 22) |
+   | Build command     | `npm ci --omit=dev`                    |
+   | Start command     | `npm start`                            |
+   | Health check path | `/health`                              |
+
+3. **Environment** (in Render's settings only, never in the repository): `MONGO_URI` (the deployed database), `JWT_SECRET` (a new one from `openssl rand -hex 32`), `NODE_ENV=production`, `TRUST_PROXY=1`, `PAYPAL_ENV=sandbox`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, and optionally `PAYPAL_MERCHANT_ID` and `CINEMA_TZ`. Render sets `PORT` itself.
+4. Deploy, then check that `https://<your-app>.onrender.com/health` returns `{"status":"ok","database":"connected"}`.
+5. **Seed the deployed database** from your computer. Copy the template, fill in `.env.production` with an editor (it is gitignored), then run the seed:
+
+   ```bash
+   cp .env.production.example .env.production
+   npm run seed:prod
+   ```
+
+   It adds the demo catalogue (only if the database has none) and the admin account, reading only `.env.production`. It refuses a connection string without a database name, or one pointing at the same database as your local `.env`.
+6. **PayPal webhook:** in the PayPal Developer Dashboard (Sandbox), add a webhook to your app for `https://<your-app>.onrender.com/payments/webhook` with the events *Payment capture completed*, *denied*, *refunded* and *reversed*. Put its ID in Render as `PAYPAL_WEBHOOK_ID`.
+
+On a deploy Render stops the old instance with `SIGTERM`; the server finishes the requests in progress before closing the database connection.
 
 ## Environment Variables
 
