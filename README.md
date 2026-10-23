@@ -63,9 +63,10 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 ```
 .
 ├── server.js                 # Entry point: loads .env, connects to MongoDB, starts listening
-├── app.js                    # Express app: security middleware, routes, 404 + error handler
+├── app.js                    # Express app: security middleware, routes, 404 + error handler (Vercel's entry)
+├── vercel.json               # Vercel install command
 ├── config/
-│   └── db.js                 # MongoDB connection; reports failed index builds at startup
+│   └── db.js                 # MongoDB connection (at startup, or on first request on Vercel); reports failed index builds
 ├── models/                   # Mongoose schemas
 │   ├── User.js
 │   ├── cinema.js
@@ -179,23 +180,17 @@ The server connects to MongoDB first, then logs `Server running on port 5050` (o
 npm test
 ```
 
-## Deploying (Render + MongoDB Atlas)
+## Deploying (Vercel + MongoDB Atlas)
 
-The app runs as a single Render web service with a MongoDB Atlas database.
+The app runs on Vercel as a single function (Vercel detects the Express app in `app.js`), with a MongoDB Atlas database. `server.js` doesn't run there: when `VERCEL` is set, `app.js` checks the settings as it loads and connects to the database on the first request. Seat holds still expire without the background sweeper, because every route that reads or books seats expires overdue holds first.
 
-1. **Atlas:** create a separate database for the deployed app (e.g. `cinemate-prod`) and a database user with *readWrite* on that database only and a long generated password. Under **Network Access**, allow `0.0.0.0/0`: Render's free tier has no fixed IP address, so the password protects the database.
-2. **Render:** **New → Web Service** for this repository, with:
-
-   | Setting           | Value                                  |
-   | ----------------- | -------------------------------------- |
-   | Runtime           | Node (`.node-version` selects Node 22) |
-   | Build command     | `npm ci --omit=dev`                    |
-   | Start command     | `npm start`                            |
-   | Health check path | `/health`                              |
-
-3. **Environment** (in Render's settings only, never in the repository): `MONGO_URI` (the deployed database), `JWT_SECRET` (a new one from `openssl rand -hex 32`), `NODE_ENV=production`, `TRUST_PROXY=1`, `PAYPAL_ENV=sandbox`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, and optionally `PAYPAL_MERCHANT_ID` and `CINEMA_TZ`. Render sets `PORT` itself.
-4. Deploy, then check that `https://<your-app>.onrender.com/health` returns `{"status":"ok","database":"connected"}`.
-5. **Seed the deployed database** from your computer. Copy the template, fill in `.env.production` with an editor (it is gitignored), then run the seed:
+1. **Atlas:** create a separate database for the deployed app (e.g. `cinemate-prod`) and a database user with *readWrite* on that database only and a long generated password. Under **Network Access**, allow `0.0.0.0/0`: Vercel has no fixed IP addresses, so the password protects the database.
+2. **Vercel:** **Add New → Project**, import this repository. Leave the framework, build and output settings as detected; `vercel.json` sets the install command (`npm ci --omit=dev`).
+3. **Environment variables** (in Vercel's settings only, never in the repository), for the Production environment: `MONGO_URI` (the deployed database), `JWT_SECRET` (a new one from `openssl rand -hex 32`), `NODE_ENV=production`, `TRUST_PROXY=1`, `PAYPAL_ENV=sandbox`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, and optionally `PAYPAL_MERCHANT_ID` and `CINEMA_TZ`.
+4. **Production branch:** Vercel serves the production URL from the branch set under **Settings → Environments → Production** (default `main`). Deployments of other branches are previews behind a Vercel login, which PayPal's webhooks can't reach.
+5. **Function region:** under **Settings → Functions**, pick the region closest to the Atlas cluster.
+6. Deploy, then check that `https://<your-project>.vercel.app/health` returns `{"status":"ok","database":"connected"}`. If the settings are incomplete, the function logs say which ones.
+7. **Seed the deployed database** from your computer. Copy the template, fill in `.env.production` with an editor (it is gitignored), then run the seed:
 
    ```bash
    cp .env.production.example .env.production
@@ -203,9 +198,9 @@ The app runs as a single Render web service with a MongoDB Atlas database.
    ```
 
    It adds the demo catalogue (only if the database has none) and the admin account, reading only `.env.production`. It refuses a connection string without a database name, or one pointing at the same database as your local `.env`.
-6. **PayPal webhook:** in the PayPal Developer Dashboard (Sandbox), add a webhook to your app for `https://<your-app>.onrender.com/payments/webhook` with the events *Payment capture completed*, *denied*, *refunded* and *reversed*. Put its ID in Render as `PAYPAL_WEBHOOK_ID`.
+8. **PayPal webhook:** in the PayPal Developer Dashboard (Sandbox), add a webhook to your app for `https://<your-project>.vercel.app/payments/webhook` with the events *Payment capture completed*, *denied*, *refunded* and *reversed*. Put its ID in Vercel as `PAYPAL_WEBHOOK_ID` and redeploy.
 
-On a deploy Render stops the old instance with `SIGTERM`; the server finishes the requests in progress before closing the database connection.
+**Limitation:** the rate limits count requests in memory, so on Vercel each function instance keeps its own count, which restarts with the instance.
 
 ## Environment Variables
 
@@ -224,7 +219,7 @@ On a deploy Render stops the old instance with `SIGTERM`; the server finishes th
 | `AUTH_RATE_LIMIT` | No          | `10`               | Failed login/register attempts allowed per IP per 15 minutes.               |
 | `HOLD_MINUTES`    | No          | `10`               | How long an unpaid booking holds its seats, 1–60. The server won't start with another value. |
 | `API_RATE_LIMIT`  | No          | `300`              | Requests allowed per IP per 15 minutes across the whole API.                |
-| `TRUST_PROXY`     | No          | `0`                | Number of proxies in front of the app when hosted (e.g. `1` on Render/Heroku). |
+| `TRUST_PROXY`     | No          | `0`                | Number of proxies in front of the app when hosted (e.g. `1` on Vercel or Render). |
 | `CINEMA_TZ`       | No          | `Africa/Cairo`     | The cinemas' time zone (IANA name), used to plan demo showtimes in local time. |
 | `ADMIN_NAME`      | No          | `Admin User`       | Used by `scripts/seedAdmin.js`.                                             |
 | `ADMIN_EMAIL`     | No          | `admin@cinema.com` | Used by `scripts/seedAdmin.js`.                                             |

@@ -12,6 +12,8 @@ import paymentRouter from "./routes/paymentRouter.js";
 import { handlePayPalWebhook } from "./controllers/webhookController.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import { createApiLimiter } from "./middlewares/rateLimit.js";
+import { connectOnce } from "./config/db.js";
+import { findConfigProblems } from "./config/env.js";
 import AppError from "./utils/AppError.js";
 
 // The Express app without a database connection or port, so tests can use it
@@ -23,6 +25,18 @@ app.set("trust proxy", Number(process.env.TRUST_PROXY) || 0);
 
 // Standard security headers
 app.use(helmet());
+
+// On Vercel, server.js doesn't run: the settings are checked when the app
+// loads and the database is connected on the first request. Seat holds
+// still expire, because every route that reads or books seats expires
+// overdue holds first.
+if (process.env.VERCEL) {
+    const problems = findConfigProblems(process.env);
+    if (problems.length > 0) {
+        throw new Error(`Can't start the app, fix these settings:\n- ${problems.join("\n- ")}`);
+    }
+    app.use((req, res, next) => connectOnce().then(() => next(), next));
+}
 
 // For the hosting platform's health checks. Before CORS and the rate limit,
 // so frequent checks are never blocked. Reports only whether the app and its
