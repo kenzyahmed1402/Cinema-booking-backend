@@ -35,12 +35,21 @@ let connecting;
 // For serverless hosting (Vercel), where server.js doesn't run: connects on
 // the first request and reuses the connection for later requests on the
 // same instance. A failed attempt is retried by the next request.
+//
+// Queries skip Mongoose's buffering and go straight to the MongoDB driver.
+// Vercel pauses idle instances, and after a pause Mongoose can hold queries
+// back until they time out after 10 seconds, while the driver itself
+// reconnects and runs them.
 export const connectOnce = () => {
     if (mongoose.connection.readyState === 1) {
         return Promise.resolve();
     }
     connecting ??= mongoose
-        .connect(process.env.MONGO_URI, { maxPoolSize: 10 })
+        .connect(process.env.MONGO_URI, {
+            maxPoolSize: 10,
+            bufferCommands: false,
+            serverSelectionTimeoutMS: 10_000,
+        })
         .then(checkIndexes)
         .catch((error) => {
             connecting = undefined;

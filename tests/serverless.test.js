@@ -65,5 +65,19 @@ describe("connectOnce", () => {
       await connectOnce();
       assert.equal(mongoose.connections.length, 1);
     });
+
+    it("sends queries straight to the driver instead of holding them back", async () => {
+      process.env.MONGO_URI = mongo.getUri("cinemate");
+      await connectOnce();
+      const Probe = mongoose.model("Probe", new mongoose.Schema({ n: Number }));
+      // What a query sees when Mongoose thinks the collection isn't ready,
+      // as after Vercel pauses an instance. With buffering it would wait
+      // 10 seconds and fail.
+      Probe.collection.buffer = true;
+      const started = Date.now();
+      await Probe.create({ n: 1 });
+      assert.equal(await Probe.countDocuments(), 1);
+      assert.ok(Date.now() - started < 5000);
+    });
   });
 });
