@@ -1,5 +1,5 @@
-import dotenv from 'dotenv';
-dotenv.config();
+// Loads .env, or the file in DOTENV_CONFIG_PATH (used by seedProduction.js)
+import 'dotenv/config';
 if ((process.env.ADMIN_PASSWORD ?? '').length < 12) {
   console.error('ADMIN_PASSWORD must be set in .env and be at least 12 characters.');
   process.exit(1);
@@ -29,7 +29,8 @@ const seedAdmin = async () => {
     console.log('Admin user created successfully');
     process.exit(0);
   } catch (error) {
-    console.error('Failed to seed admin:', error);
+    // Only the message: a full error could include the connection string
+    console.error('Failed to seed admin:', error.message);
     process.exit(1);
   }
 };

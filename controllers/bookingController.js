@@ -1,30 +1,28 @@
-import Booking, { MAX_SEATS } from "../models/Booking.js";
+import Booking, {
+  API_STATUS_CHANGES,
+  BOOKING_STATUSES,
+  MAX_SEATS,
+  PAID_STATUSES,
+  SEAT_HOLDING_STATUSES,
+  holdsSeats,
+} from "../models/Booking.js";
 import Showtime from "../models/showTime.js";
+import Payment from "../models/Payment.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
 import { buildFilter, enumFilter, getPagination, idFilter, sendPage } from "../utils/listQuery.js";
 import { assertSeatsFit } from "../utils/seatLayout.js";
+import { releaseSeats, reserveSeats } from "../utils/showtimeSeats.js";
+import { holdExpiry } from "../utils/bookingHolds.js";
+import { POLICY_TEXT, quoteCancellation } from "../utils/cancellationPolicy.js";
+import { refundPayment } from "../services/refundService.js";
 
-// A booking holds its seats on its showtime unless it is cancelled
+// A booking holds its seats on its showtime unless it is cancelled, expired
+// or refunded
 const heldSeats = ({ showtime, seats, status }) => ({
   showtime: String(showtime),
-  seats: status === "cancelled" ? [] : seats,
+  seats: holdsSeats(status) ? seats : [],
 });
-
-// Atomically adds the seats to the showtime only if none of them are taken.
-// Resolves to null if the showtime doesn't exist or a seat is already booked.
-const reserveSeats = (showtime, seats) =>
-  Showtime.findOneAndUpdate(
-    { _id: showtime, bookedSeats: { $nin: seats } },
-    { $addToSet: { bookedSeats: { $each: seats } } },
-    { returnDocument: "after" }
-  );
-
-const releaseSeats = (showtime, seats) =>
-  Showtime.updateOne(
-    { _id: showtime },
-    { $pull: { bookedSeats: { $in: seats } } }
-  );
 
 // The server always calculates the price; rounded to cents to avoid
 // floating point leftovers like 0.30000000000000004
@@ -34,18 +32,81 @@ const priceFor = (showtimeDoc, seats) =>
 const sameSeats = (a, b) =>
   a.length === b.length && [...a].sort().join() === [...b].sort().join();
 
+// Refuses (409) changes the booking's current state doesn't allow. Only an
+// unpaid (pending) booking can be cancelled or get other seats or another
+// showtime; a paid booking's seats and price are fixed. Sending the status it
+// already has changes nothing.
+const assertAllowedChange = (existing, changes) => {
+  if (changes.status && changes.status !== existing.status) {
+    const allowed = API_STATUS_CHANGES[existing.status] ?? [];
+    if (!allowed.includes(changes.status)) {
+      throw new AppError(
+        `A ${existing.status} booking can't be changed to ${changes.status}` +
+          (PAID_STATUSES.includes(existing.status) ? "; paid bookings are cancelled with a refund" : ""),
+        409
+      );
+    }
+  }
+
+  if ((changes.seats || changes.showtime) && existing.status !== "pending") {
+    throw new AppError(
+      `The seats and showtime of a ${existing.status} booking can't be changed`,
+      409
+    );
+  }
+};
+
 // Customers can only reach their own bookings; admins can reach all of them.
 // Someone else's booking looks "not found" so its ID isn't confirmed.
 const accessFilter = (req) =>
   req.user.role === "ADMIN" ? {} : { user: req.user._id };
 
-export const createBooking = catchAsync(async (req, res) => {
-  const { showtime, seats } = req.body;
-
-  const showtimeDoc = await Showtime.findById(showtime).populate("screen");
+// Loads a showtime that can still be booked: it exists and hasn't started
+const bookableShowtime = async (id) => {
+  const showtimeDoc = await Showtime.findById(id).populate("screen");
   if (!showtimeDoc) {
     throw new AppError("Showtime not found", 404);
   }
+  if (showtimeDoc.startTime <= new Date()) {
+    throw new AppError("This showtime has already started", 409);
+  }
+  return showtimeDoc;
+};
+
+const takenSeats = (showtimeDoc, seats) => seats.filter((seat) => showtimeDoc.bookedSeats.includes(seat));
+
+// POST /bookings/quote { showtime, seats }: what these seats would cost,
+// calculated by the server, without reserving anything
+export const quoteBooking = catchAsync(async (req, res) => {
+  const { showtime, seats } = req.body;
+  const showtimeDoc = await bookableShowtime(showtime);
+  assertSeatsFit(showtimeDoc.screen, seats, { alreadyBooked: showtimeDoc.bookedSeats.length });
+
+  const taken = takenSeats(showtimeDoc, seats);
+  if (taken.length > 0) {
+    throw new AppError(`Seats already booked: ${taken.join(", ")}`, 409);
+  }
+
+  res.json({
+    status: "success",
+    data: {
+      quote: {
+        showtime: showtimeDoc._id,
+        startTime: showtimeDoc.startTime,
+        seats,
+        pricePerSeat: showtimeDoc.price,
+        totalPrice: priceFor(showtimeDoc, seats),
+        totalCents: Math.round(priceFor(showtimeDoc, seats) * 100),
+        currency: "USD",
+      },
+    },
+  });
+});
+
+export const createBooking = catchAsync(async (req, res) => {
+  const { showtime, seats } = req.body;
+
+  const showtimeDoc = await bookableShowtime(showtime);
 
   assertSeatsFit(showtimeDoc.screen, seats, {
     alreadyBooked: showtimeDoc.bookedSeats.length,
@@ -57,7 +118,7 @@ export const createBooking = catchAsync(async (req, res) => {
     const mine = await Booking.find({
       user: req.user._id,
       showtime,
-      status: { $ne: "cancelled" },
+      status: { $in: SEAT_HOLDING_STATUSES },
     });
     const held = mine.reduce((count, booking) => count + booking.seats.length, 0);
     if (held + seats.length > MAX_SEATS) {
@@ -68,9 +129,7 @@ export const createBooking = catchAsync(async (req, res) => {
     }
   }
 
-  const alreadyTaken = seats.filter((seat) =>
-    showtimeDoc.bookedSeats.includes(seat)
-  );
+  const alreadyTaken = takenSeats(showtimeDoc, seats);
   if (alreadyTaken.length > 0) {
     throw new AppError(
       `Seats already booked: ${alreadyTaken.join(", ")}`,
@@ -89,13 +148,15 @@ export const createBooking = catchAsync(async (req, res) => {
 
   let booking;
   try {
-    // New bookings always start as pending; only an admin changes the status
+    // New bookings always start as pending and hold their seats until
+    // holdExpiresAt; unpaid by then, they expire and the seats come back
     booking = await Booking.create({
       ...req.body,
       user: req.user._id,
       customerName: req.user.name,
       customerEmail: req.user.email,
       status: "pending",
+      holdExpiresAt: holdExpiry(),
       totalPrice: priceFor(showtimeDoc, seats),
     });
   } catch (err) {
@@ -117,7 +178,7 @@ export const getBookings = catchAsync(async (req, res) => {
     ...accessFilter(req),
     ...buildFilter({
       showtime: idFilter(req.query, "showtime"),
-      status: enumFilter(req.query, "status", ["pending", "confirmed", "cancelled"]),
+      status: enumFilter(req.query, "status", BOOKING_STATUSES),
     }),
   };
   const query = Booking.find(filter)
@@ -163,6 +224,12 @@ export const updateBooking = catchAsync(async (req, res) => {
 
   // Only validated fields; totalPrice isn't one of them, it's calculated below
   const changes = req.body;
+  assertAllowedChange(existing, changes);
+
+  // Once checkout has started, the price the customer saw must not change
+  if ((changes.seats || changes.showtime) && (await Payment.exists({ booking: existing._id }))) {
+    throw new AppError("The seats and showtime can't be changed once payment has started", 409);
+  }
 
   const before = heldSeats(existing);
   const after = heldSeats({ ...existing.toObject(), ...changes });
@@ -209,14 +276,16 @@ export const updateBooking = catchAsync(async (req, res) => {
 
   let booking;
   try {
+    // Only if the status is still the one checked above: a payment or an
+    // expiring hold may have changed it in the meantime
     booking = await Booking.findOneAndUpdate(
-      { _id: req.params.id },
+      { _id: req.params.id, status: existing.status },
       { ...changes, totalPrice: newTotalPrice },
       { returnDocument: "after", runValidators: true }
     );
 
     if (!booking) {
-      throw new AppError("Booking not found", 404);
+      throw new AppError("The booking changed while it was being updated. Please try again.", 409);
     }
   } catch (err) {
     // Undo the reservation so a failed update doesn't hold the new seats
@@ -237,14 +306,23 @@ export const updateBooking = catchAsync(async (req, res) => {
 });
 
 export const deleteBooking = catchAsync(async (req, res) => {
-  const booking = await Booking.findOneAndDelete({ _id: req.params.id });
+  // A paid booking is the record of a payment, so it is never deleted. The
+  // status check is part of the delete, so it can't change in between.
+  const booking = await Booking.findOneAndDelete({
+    _id: req.params.id,
+    status: { $nin: PAID_STATUSES },
+  });
 
   if (!booking) {
+    const paid = await Booking.findById(req.params.id).select("status");
+    if (paid) {
+      throw new AppError(`A ${paid.status} booking can't be deleted: it has a payment`, 409);
+    }
     throw new AppError("Booking not found", 404);
   }
 
-  // A cancelled booking already gave its seats back; releasing them again
-  // could free seats that another booking now holds
+  // A cancelled, expired or refunded booking already gave its seats back;
+  // releasing them again could free seats that another booking now holds
   const { showtime, seats } = heldSeats(booking);
   if (seats.length > 0) {
     await releaseSeats(showtime, seats);
@@ -254,4 +332,66 @@ export const deleteBooking = catchAsync(async (req, res) => {
     status: "success",
     data: null,
   });
+});
+
+// The paid booking (with its showtime) and its captured payment, for the
+// logged-in user, or a clear refusal
+const paidBookingFor = async (req) => {
+  const booking = await Booking.findOne({ _id: req.params.id, ...accessFilter(req) }).populate("showtime");
+  if (!booking) {
+    throw new AppError("Booking not found", 404);
+  }
+  if (booking.status === "pending") {
+    throw new AppError('This booking isn\'t paid; cancel it with { "status": "cancelled" }, nothing is charged', 409);
+  }
+  if (booking.status !== "confirmed") {
+    throw new AppError(`A ${booking.status} booking can't be cancelled`, 409);
+  }
+  const payment = await Payment.findOne({ booking: booking._id, status: "captured" });
+  if (!payment) {
+    throw new AppError("No completed payment was found for this booking", 409);
+  }
+  return { booking, payment };
+};
+
+const quoteFor = (booking, payment) => ({
+  ...quoteCancellation({ startTime: booking.showtime.startTime, paidCents: payment.amountCents }),
+  paidCents: payment.amountCents,
+  currency: payment.currency,
+  showStartsAt: booking.showtime.startTime,
+  policy: POLICY_TEXT,
+});
+
+// GET /bookings/:id/cancellation-quote: what cancelling this paid booking
+// refunds right now, calculated by the server from the policy
+export const getCancellationQuote = catchAsync(async (req, res) => {
+  const { booking, payment } = await paidBookingFor(req);
+  res.json({ status: "success", data: { quote: quoteFor(booking, payment) } });
+});
+
+// POST /bookings/:id/cancel { confirm: true }: cancels a paid booking and
+// refunds what the policy allows at this moment (not what an earlier quote
+// said). The seats are freed only after PayPal accepted the refund.
+export const cancelPaidBooking = catchAsync(async (req, res) => {
+  const { booking, payment } = await paidBookingFor(req);
+  const quote = quoteFor(booking, payment);
+  if (!quote.allowed) {
+    throw new AppError(`This booking can't be cancelled any more: ${quote.reason.toLowerCase()}`, 409);
+  }
+
+  const refunded = await refundPayment(payment, {
+    fromStatus: "captured",
+    refundCents: quote.refundCents === payment.amountCents ? undefined : quote.refundCents,
+  });
+
+  const cancelled = await Booking.findOneAndUpdate(
+    { _id: booking._id, status: "confirmed" },
+    { status: "refunded" },
+    { returnDocument: "after" }
+  );
+  if (cancelled) {
+    await releaseSeats(booking.showtime._id, booking.seats);
+  }
+
+  res.json({ status: "success", data: { booking: cancelled ?? booking, payment: refunded, quote } });
 });

@@ -53,6 +53,38 @@ export const dayFilter = (query, name) => {
   return { $gte: start, $lt: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
 };
 
+// ?from=2030-03-01T18:00:00Z -> a Date. Any date-time JavaScript can read.
+export const timeParam = (query, name) => {
+  const value = query[name];
+  if (value === undefined) return undefined;
+  const time = new Date(value);
+  if (typeof value !== "string" || value.length > 40 || isNaN(time)) {
+    throw new AppError(`${name} must be a date-time like 2030-03-01T18:00:00Z`, 400);
+  }
+  return time;
+};
+
+// ?upcoming=true -> true; only "true" and "false" are accepted
+export const booleanParam = (query, name) => {
+  const value = query[name];
+  if (value === undefined) return undefined;
+  if (value !== "true" && value !== "false") {
+    throw new AppError(`${name} must be true or false`, 400);
+  }
+  return value === "true";
+};
+
+// ?area=downtown -> a case-insensitive "contains" match. Special characters
+// are escaped, so the text is matched literally and can't be a slow pattern.
+export const textParam = (query, name, { maxLength = 100 } = {}) => {
+  const value = query[name];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.trim() === "" || value.length > maxLength) {
+    throw new AppError(`${name} must be text of 1-${maxLength} characters`, 400);
+  }
+  return new RegExp(value.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+};
+
 // Drops filters that weren't sent
 export const buildFilter = (filters) =>
   Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined));
