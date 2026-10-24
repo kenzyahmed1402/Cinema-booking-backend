@@ -75,7 +75,8 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 │   ├── showTime.js
 │   ├── Booking.js
 │   ├── Payment.js            # PayPal order / capture record per booking
-│   └── WebhookEvent.js       # PayPal webhook events already handled
+│   ├── WebhookEvent.js       # PayPal webhook events already handled
+│   └── RateLimit.js          # Rate-limit counts, shared by every instance
 ├── services/
 │   ├── paypalService.js      # PayPal Sandbox client (token, create order, capture, refund)
 │   ├── captureService.js     # Checks and records a capture (endpoint and webhook)
@@ -98,7 +99,8 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 │   ├── showtimeSeats.js      # Atomic seat reserve / release on a showtime
 │   ├── bookingHolds.js       # Hold deadlines and expiry of unpaid bookings
 │   ├── cancellationPolicy.js # Refund percentage by time before the show
-│   └── listQuery.js          # Pagination, filters, list responses
+│   ├── listQuery.js          # Pagination, filters, list responses
+│   └── rateLimitStore.js     # Keeps rate-limit counts in MongoDB
 ├── scripts/
 │   ├── seedAdmin.js          # Creates the first admin account
 │   ├── seedDemo.js           # Adds the fictional demo catalogue
@@ -199,8 +201,6 @@ The app runs on Vercel as a single function (Vercel detects the Express app in `
 
    It adds the demo catalogue (only if the database has none) and the admin account, reading only `.env.production`. It refuses a connection string without a database name, or one pointing at the same database as your local `.env`.
 8. **PayPal webhook:** in the PayPal Developer Dashboard (Sandbox), add a webhook to your app for `https://<your-project>.vercel.app/payments/webhook` with the events *Payment capture completed*, *denied*, *refunded* and *reversed*. Put its ID in Vercel as `PAYPAL_WEBHOOK_ID` and redeploy.
-
-**Limitation:** the rate limits count requests in memory, so on Vercel each function instance keeps its own count, which restarts with the instance.
 
 ## Environment Variables
 
@@ -659,7 +659,7 @@ Common status codes:
 | ----------------- | ------------------------------------------------------------------------------------------ | ----------------- |
 | helmet            | Standard security headers; hides `X-Powered-By`                                            | —                 |
 | CORS              | Lets browser frontends call the API; any origin unless restricted                          | `CORS_ORIGIN`     |
-| Rate limiting     | 300 requests per IP per 15 minutes across the API, and 10 failed login/register attempts per IP per 15 minutes (successes don't count); then `429` | `API_RATE_LIMIT`, `AUTH_RATE_LIMIT` |
+| Rate limiting     | 300 requests per IP per 15 minutes across the API, and 10 failed login/register attempts per IP per 15 minutes (successes don't count); then `429`. Counts are kept in MongoDB, shared by every running instance, with IPs stored only as hashes and deleted after the window | `API_RATE_LIMIT`, `AUTH_RATE_LIMIT` |
 | Proxy awareness   | Real client IPs for rate limiting when hosted behind a proxy                               | `TRUST_PROXY`     |
 | Password hashing  | bcrypt; passwords are never returned                                                       | —                 |
 
