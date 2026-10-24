@@ -37,9 +37,9 @@ describe("connectOnce", () => {
   });
 
   it("answers 503 without the connection details when the database is down, and tries again next time", async () => {
-    process.env.MONGO_URI = "mongodb://user:db-secret-pw@127.0.0.1:1/cinemate?serverSelectionTimeoutMS=300";
+    process.env.MONGO_URI = "mongodb://user:db-secret-pw@127.0.0.1:1/cinemate";
     for (let attempt = 0; attempt < 2; attempt++) {
-      await assert.rejects(connectOnce(), (err) => {
+      await assert.rejects(connectOnce({ serverSelectionTimeoutMS: 300 }), (err) => {
         assert.equal(err.statusCode, 503);
         assert.doesNotMatch(err.message, /db-secret-pw|127\.0\.0\.1/);
         return true;

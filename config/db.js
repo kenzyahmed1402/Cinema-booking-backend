@@ -39,8 +39,9 @@ let connecting;
 // Queries skip Mongoose's buffering and go straight to the MongoDB driver.
 // Vercel pauses idle instances, and after a pause Mongoose can hold queries
 // back until they time out after 10 seconds, while the driver itself
-// reconnects and runs them.
-export const connectOnce = () => {
+// reconnects and runs them. The time to give up on an unreachable database
+// is passed in so tests can use a short one.
+export const connectOnce = ({ serverSelectionTimeoutMS = 10_000 } = {}) => {
     if (mongoose.connection.readyState === 1) {
         return Promise.resolve();
     }
@@ -48,7 +49,7 @@ export const connectOnce = () => {
         .connect(process.env.MONGO_URI, {
             maxPoolSize: 10,
             bufferCommands: false,
-            serverSelectionTimeoutMS: 10_000,
+            serverSelectionTimeoutMS,
         })
         .then(checkIndexes)
         .catch((error) => {
