@@ -17,6 +17,8 @@ import { refundPayment } from "./refundService.js";
 export const priceFor = (showtimeDoc, seats) =>
   Math.round(showtimeDoc.price * seats.length * 100) / 100;
 
+export const formatCents = (cents) => `$${(cents / 100).toFixed(2)}`;
+
 // Customers can only reach their own bookings; admins can reach all of them.
 // Someone else's booking looks "not found" so its ID isn't confirmed.
 export const accessFilter = (user) => (user.role === "ADMIN" ? {} : { user: user._id });
@@ -148,13 +150,21 @@ export const cancellationQuoteFor = (booking, payment) => ({
 });
 
 // Cancels a paid booking and refunds what the policy allows at this moment
-// (not what an earlier quote said). The seats are freed only after PayPal
-// accepted the refund.
-export const cancelPaidBooking = async (user, bookingId) => {
+// (not what an earlier quote said). With expectedRefundCents (the amount the
+// customer agreed to), a different refund is refused instead. The seats are
+// freed only after PayPal accepted the refund.
+export const cancelPaidBooking = async (user, bookingId, { expectedRefundCents } = {}) => {
   const { booking, payment } = await paidBookingFor(user, bookingId);
   const quote = cancellationQuoteFor(booking, payment);
   if (!quote.allowed) {
     throw new AppError(`This booking can't be cancelled any more: ${quote.reason.toLowerCase()}`, 409);
+  }
+  if (expectedRefundCents !== undefined && quote.refundCents !== expectedRefundCents) {
+    throw new AppError(
+      `The refund is now ${formatCents(quote.refundCents)} instead of ${formatCents(expectedRefundCents)} ` +
+        `(${quote.refundPercent}% under the policy). Nothing was cancelled.`,
+      409
+    );
   }
 
   const refunded = await refundPayment(payment, {

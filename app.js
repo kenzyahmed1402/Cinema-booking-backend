@@ -9,6 +9,7 @@ import STRouter from "./routes/showTimeRouter.js";
 import bookingRouter from "./routes/bookingRouter.js";
 import authRouter from "./routes/authRouter.js";
 import paymentRouter from "./routes/paymentRouter.js";
+import agentRouter from "./routes/agentRouter.js";
 import { handlePayPalWebhook } from "./controllers/webhookController.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import { createApiLimiter } from "./middlewares/rateLimit.js";
@@ -72,6 +73,7 @@ app.use('/showTimes',STRouter);
 app.use('/bookings',bookingRouter);
 app.use('/auth',authRouter);
 app.use('/payments', paymentRouter);
+app.use('/agent', agentRouter);
 
 app.use((req, res, next) => {
     next(new AppError(`Can't find ${req.originalUrl} on this server`, 404));

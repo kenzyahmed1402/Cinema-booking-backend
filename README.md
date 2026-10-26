@@ -42,7 +42,8 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 - **Two validation layers** (request + Mongoose) and request bodies limited to allowed fields
 - **Consistent error responses** with the right status codes (400 / 401 / 403 / 404 / 409 / 429)
 - **Security:** helmet headers, CORS, a general rate limit plus a stricter one on login/register, at most 10 seats per customer per showtime
-- **Automated test suite** (137 tests) against an in-memory MongoDB
+- **Assistant tools:** a fixed allowlist of read tools and two "propose" tools that only create a card; the customer's click confirms it, after the server re-checks seats, price or refund
+- **Automated test suite** against an in-memory MongoDB
 
 ## Tech Stack
 
@@ -76,8 +77,13 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 │   ├── Booking.js
 │   ├── Payment.js            # PayPal order / capture record per booking
 │   ├── WebhookEvent.js       # PayPal webhook events already handled
-│   └── RateLimit.js          # Rate-limit counts, shared by every instance
+│   ├── RateLimit.js          # Rate-limit counts, shared by every instance
+│   └── AgentProposal.js      # Booking / cancellation cards waiting for the customer's click
 ├── services/
+│   ├── bookingService.js     # Quote, hold, cancellation rules shared by the API and the assistant
+│   ├── showtimeService.js    # Showtime search shared by the API and the assistant
+│   ├── agentTools.js         # The assistant's allowlisted tools
+│   ├── proposalService.js    # Confirming a proposal card (re-checks everything)
 │   ├── paypalService.js      # PayPal Sandbox client (token, create order, capture, refund)
 │   ├── captureService.js     # Checks and records a capture (endpoint and webhook)
 │   └── refundService.js      # The one refund routine used by every refund
@@ -385,6 +391,8 @@ Access: **Public** = no login · **Logged in** = any user · **Admin** = admin o
 | `POST` | `/payments/webhook` | PayPal (signature checked) | PayPal's event notifications, see [Webhooks](#paypal-webhooks) |
 | `GET`  | `/bookings/:id/cancellation-quote` | Logged in | What cancelling your paid booking refunds right now |
 | `POST` | `/bookings/:id/cancel` | Logged in | Cancel your paid booking with a refund. Body: `{ "confirm": true }` |
+| `GET`  | `/agent/proposals/:id` | Logged in | One of your own proposal cards and its status |
+| `POST` | `/agent/proposals/:id/confirm` | Logged in | Confirm your own proposal card, see [Assistant tools](#assistant-tools-and-proposals) |
 
 See [Payments](#payments) for the rules.
 
@@ -457,6 +465,28 @@ PayPal also reports payment events to `POST /payments/webhook`. They cover what 
 | `PAYMENT.CAPTURE.REFUNDED`   | A `refund_pending` payment becomes `refunded`. A refund made outside the app (e.g. in the PayPal dashboard) is recorded and its booking held as `needs_review` |
 | `PAYMENT.CAPTURE.REVERSED`   | Payment and booking become `needs_review` (e.g. a dispute)            |
 | Anything else                | Acknowledged and ignored                                              |
+
+### Assistant tools and proposals
+
+The booking assistant can only use the tools in `services/agentTools.js`. Each runs for the logged-in user (never a user named by the model), as a customer even for admins, and its arguments are checked like a request body, with unknown fields dropped.
+
+| Tool | Kind | What it does |
+| ---- | ---- | ------------ |
+| `searchMovies` | read | Movies by genre and/or title words |
+| `searchShowtimes` | read | Upcoming showtimes by area, cinema, movie, genre, date or time window, with cinema, local time, price and free seats |
+| `getAvailableSeats` | read | Seat layout and taken seats |
+| `getBookingQuote` | read | Server price for seats; reserves nothing |
+| `getMyBookings` | read | Your own bookings only |
+| `getPaymentStatus` | read | Payment status of your own booking |
+| `getCancellationQuote` | read | Refund the policy allows right now for your paid booking |
+| `proposeBooking` | propose | Saves a booking card (showtime, seats, server total); reserves nothing |
+| `proposeCancellation` | propose | Saves a cancellation card (booking, refund); cancels nothing |
+
+A card is saved as an `AgentProposal` and can be confirmed for 15 minutes with `POST /agent/proposals/:id/confirm`, which re-checks everything first:
+
+- **Booking card:** the seats must still be free and the price the same as on the card (otherwise `409` with the new price); then the seats are held as a `pending` booking, paid next with `POST /payments/orders`.
+- **Cancellation card:** the refund must still be the one on the card (otherwise `409` with the new amount, nothing refunded); then the booking is cancelled with that refund.
+- **Once only:** confirming again returns the first result, so a double click can't book or refund twice. A failed confirm changes nothing and can be retried; an expired card answers `410`; another user's card is `404`.
 
 ### Pagination, filters and sorting
 
