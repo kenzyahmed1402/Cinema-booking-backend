@@ -147,7 +147,7 @@ export const agentTools = {
         cinema: booking.showtime?.screen?.cinema?.name,
         startTime: booking.showtime?.startTime,
         localTime: booking.showtime ? localTime(booking.showtime.startTime) : undefined,
-        seats: booking.seats,
+        seats: [...booking.seats],
         totalPrice: booking.totalPrice,
         ...(booking.status === "pending" && { holdExpiresAt: booking.holdExpiresAt }),
       }));
@@ -225,7 +225,7 @@ export const agentTools = {
         cinema: doc?.screen?.cinema?.name,
         startTime: found.booking.showtime.startTime,
         localTime: localTime(found.booking.showtime.startTime),
-        seats: found.booking.seats,
+        seats: [...found.booking.seats],
         paidCents: quote.paidCents,
         refundCents: quote.refundCents,
         refundPercent: quote.refundPercent,

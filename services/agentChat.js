@@ -68,9 +68,11 @@ export const systemInstruction = (now = new Date()) => {
 
 // Runs one tool call. Refusals (a taken seat, an unknown booking) go back to
 // the model so it can explain them; anything else is logged and summarised.
+// Results are turned into plain JSON (IDs and dates as text), exactly what
+// the model is sent and the conversation stores.
 const runToolCall = async (user, call) => {
   try {
-    return { output: await runTool(user, call.name, call.args ?? {}) };
+    return { output: JSON.parse(JSON.stringify(await runTool(user, call.name, call.args ?? {}))) };
   } catch (err) {
     if (err.isOperational) {
       return { error: err.message };
