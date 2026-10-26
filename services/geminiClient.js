@@ -1,8 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
 
-// The model behind the assistant: Gemini, through Google's SDK. Set
-// GEMINI_MODEL to use another Gemini model.
-export const DEFAULT_MODEL = "gemini-3.8-flash";
+// The models behind the assistant: Gemini, through Google's SDK. A message
+// uses GEMINI_MODEL, or GEMINI_FALLBACK_MODEL when the first is busy.
+export const DEFAULT_MODEL = "gemini-3.5-flash";
+export const DEFAULT_FALLBACK_MODEL = "gemini-3.8-flash";
+
+export const modelNames = () => [
+  ...new Set([process.env.GEMINI_MODEL || DEFAULT_MODEL, process.env.GEMINI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL]),
+];
 
 // One model call: the conversation so far and the tools it may ask for.
 // Returns the model's turn as it should be stored (`content`), the tool calls
@@ -13,8 +18,7 @@ export const DEFAULT_MODEL = "gemini-3.8-flash";
 const createGeminiClient = (apiKey) => {
   const ai = new GoogleGenAI({ apiKey });
   return {
-    generate: async ({ systemInstruction, contents, functionDeclarations, timeoutMs }) => {
-      const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+    generate: async ({ model, systemInstruction, contents, functionDeclarations, timeoutMs }) => {
       const response = await ai.models.generateContent({
         model,
         contents,

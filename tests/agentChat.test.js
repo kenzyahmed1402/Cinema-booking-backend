@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import { api, book, bookedSeats, createShowtime, createUser, useTestDatabase } from "./helpers.js";
-import { setModelClient } from "../services/geminiClient.js";
+import { DEFAULT_FALLBACK_MODEL, DEFAULT_MODEL, setModelClient } from "../services/geminiClient.js";
 import { setPayPalClient } from "../services/paypalService.js";
 import { MAX_TOOL_CALLS, TURN_BUDGET_MS, systemInstruction } from "../services/agentChat.js";
 import AgentProposal from "../models/AgentProposal.js";
@@ -365,6 +365,50 @@ describe("assistant chat limits", () => {
     assert.equal(res.status, 200);
     assert.match(res.body.data.reply, /taking me too long/);
     assert.equal(model.requests.length, 2);
+  });
+
+  it("uses the second model for a message when the first is busy, and stays on it", async () => {
+    const { alice } = await setup();
+    const calls = [];
+    let step = 0;
+    setModelClient({
+      generate: async ({ model }) => {
+        calls.push(model);
+        if (model === DEFAULT_MODEL) throw Object.assign(new Error("high demand"), { status: 503 });
+        step += 1;
+        return step === 1 ? ask(["searchMovies", {}]) : say("Here are the movies.");
+      },
+    });
+
+    const res = await send(alice, "Which movies are on?");
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.reply, "Here are the movies.");
+    assert.deepEqual(calls, [DEFAULT_MODEL, DEFAULT_FALLBACK_MODEL, DEFAULT_FALLBACK_MODEL]);
+  });
+
+  it("doesn't switch models for a refused request, and answers 503 when both fail", async () => {
+    const { alice } = await setup();
+    const calls = [];
+    setModelClient({
+      generate: async ({ model }) => {
+        calls.push(model);
+        throw Object.assign(new Error("API key not valid"), { status: 400 });
+      },
+    });
+    assert.equal((await send(alice, "Hello")).status, 503);
+    assert.deepEqual(calls, [DEFAULT_MODEL]);
+
+    calls.length = 0;
+    setModelClient({
+      generate: async ({ model }) => {
+        calls.push(model);
+        throw Object.assign(new Error("Deadline expired"), { status: 504 });
+      },
+    });
+    const res = await send(alice, "Hello");
+    assert.equal(res.status, 503);
+    assert.match(res.body.message, /seat picker/);
+    assert.deepEqual(calls, [DEFAULT_MODEL, DEFAULT_FALLBACK_MODEL]);
   });
 
   it("needs a login and a non-empty message of at most 1000 characters", async () => {

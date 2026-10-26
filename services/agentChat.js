@@ -3,7 +3,7 @@ import AppError from "../utils/AppError.js";
 import { POLICY_TEXT } from "../utils/cancellationPolicy.js";
 import { DEFAULT_TIME_ZONE } from "../utils/timezone.js";
 import { MongoRateLimitStore } from "../utils/rateLimitStore.js";
-import { getModelClient } from "./geminiClient.js";
+import { getModelClient, modelNames } from "./geminiClient.js";
 import { runTool, toolDeclarations } from "./agentTools.js";
 
 // One chat turn with the booking assistant: the customer's message, the
@@ -14,7 +14,7 @@ import { runTool, toolDeclarations } from "./agentTools.js";
 export const MAX_TOOL_CALLS = 6;
 // Each model call gives up after this long, and a whole message after
 // TURN_BUDGET_MS (checked before each model call)
-export const MODEL_TIMEOUT_MS = 45_000;
+export const MODEL_TIMEOUT_MS = 30_000;
 export const TURN_BUDGET_MS = 90_000;
 // Turns kept for the model, and chat messages kept for the screen
 const MAX_CONTENTS = 40;
@@ -99,27 +99,47 @@ const trimContents = (contents) => {
   return contents.slice(start);
 };
 
-const askModel = async (model, contents) => {
+const callModel = async (client, model, contents) => {
   await useDailyQuota();
-  try {
-    return await model.generate({
-      systemInstruction: systemInstruction(),
-      contents,
-      functionDeclarations: toolDeclarations,
-      timeoutMs: MODEL_TIMEOUT_MS,
-    });
-  } catch (err) {
-    // Only the message: nothing about the request or the key
-    console.error(`Assistant model call failed: ${err.message}`);
-    throw new AppError(UNAVAILABLE, 503);
+  return client.generate({
+    model,
+    systemInstruction: systemInstruction(),
+    contents,
+    functionDeclarations: toolDeclarations,
+    timeoutMs: MODEL_TIMEOUT_MS,
+  });
+};
+
+// Busy, overloaded or too slow: worth trying the other model. A refused
+// request (bad key, unknown model) isn't.
+const isTransient = (err) => !err.status || [429, 500, 502, 503, 504].includes(err.status);
+
+const modelFailed = (model, err) => {
+  // Only the message: nothing about the request or the key
+  console.error(`Assistant model call failed (${model}): ${err.message}`);
+};
+
+// The first call of a message picks the model: GEMINI_MODEL, or the fallback
+// when it's busy. The rest of the message stays on that model, since a model
+// expects its own earlier turns in a tool-calling exchange.
+const askModel = async (client, contents, chosen) => {
+  for (const model of chosen ? [chosen] : modelNames()) {
+    try {
+      return { model, response: await callModel(client, model, contents) };
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      modelFailed(model, err);
+      if (chosen || !isTransient(err)) break;
+    }
   }
+  throw new AppError(UNAVAILABLE, 503);
 };
 
 // One message from the customer. Returns the reply and any cards. A failed
 // turn isn't saved, so the conversation stays as it was.
 export const chat = async (user, message) => {
-  const model = getModelClient();
-  if (!model) {
+  const client = getModelClient();
+  if (!client) {
     throw new AppError(UNAVAILABLE, 503);
   }
 
@@ -127,6 +147,7 @@ export const chat = async (user, message) => {
   const contents = [...JSON.parse(conversation?.contents ?? "[]"), { role: "user", parts: [{ text: message }] }];
   const cards = [];
   const started = Date.now();
+  let model;
   let toolCalls = 0;
   let reply;
 
@@ -136,7 +157,9 @@ export const chat = async (user, message) => {
       contents.push({ role: "model", parts: [{ text: reply }] });
       break;
     }
-    const response = await askModel(model, contents);
+    const answer = await askModel(client, contents, model);
+    model = answer.model;
+    const response = answer.response;
     const calls = response.functionCalls ?? [];
 
     if (calls.length === 0) {
