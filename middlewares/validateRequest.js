@@ -92,33 +92,42 @@ const validateField = (field, value, rules, partial) => {
   return errors;
 };
 
-// partial: true is for updates - only the fields that were sent are checked
-const validateRequest = (schema, { partial = false } = {}) => {
+// Checks `data` against `schema` and returns only the fields the schema
+// allows, so a request can't set fields like _id or bookedSeats that the API
+// doesn't accept. Throws a 400 listing every problem. partial: true is for
+// updates - only the fields that were sent are checked. Also used for the
+// assistant's tool arguments.
+export const checkFields = (schema, data, { partial = false } = {}) => {
+  const body = data ?? {};
+  const errors = [];
+
+  if (partial && !Object.keys(schema).some((field) => body[field] !== undefined)) {
+    throw new AppError("Provide at least one field to update", 400);
+  }
+
+  for (const [field, rules] of Object.entries(schema)) {
+    errors.push(...validateField(field, body[field], rules, partial));
+  }
+
+  if (errors.length > 0) {
+    throw new AppError(errors.join(". "), 400);
+  }
+
+  return Object.fromEntries(
+    Object.keys(schema)
+      .filter((field) => body[field] !== undefined)
+      .map((field) => [field, body[field]])
+  );
+};
+
+const validateRequest = (schema, options) => {
   return (req, res, next) => {
-    // Express 5 leaves req.body undefined when the request has no body
-    const body = req.body ?? {};
-    const errors = [];
-
-    if (partial && !Object.keys(schema).some((field) => body[field] !== undefined)) {
-      return next(new AppError("Provide at least one field to update", 400));
+    try {
+      // Express 5 leaves req.body undefined when the request has no body
+      req.body = checkFields(schema, req.body, options);
+    } catch (err) {
+      return next(err);
     }
-
-    for (const [field, rules] of Object.entries(schema)) {
-      errors.push(...validateField(field, body[field], rules, partial));
-    }
-
-    if (errors.length > 0) {
-      return next(new AppError(errors.join(". "), 400));
-    }
-
-    // Keep only the fields this schema allows, so a request can't set
-    // fields like _id or bookedSeats that the API doesn't accept
-    req.body = Object.fromEntries(
-      Object.keys(schema)
-        .filter((field) => body[field] !== undefined)
-        .map((field) => [field, body[field]])
-    );
-
     next();
   };
 };

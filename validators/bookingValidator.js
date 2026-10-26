@@ -14,7 +14,7 @@ const seatsRule = {
 
 // Creating a booking: the user, customer name and email come from the
 // logged-in account, totalPrice is calculated and status starts as pending
-const bookingSchema = {
+export const bookingSchema = {
   showtime: { required: true, type: "ObjectId" },
   seats: seatsRule,
 };

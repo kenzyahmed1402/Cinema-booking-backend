@@ -1,19 +1,10 @@
 import Showtime from "../models/showTime.js";
-import Movie, { MAX_MOVIE_MINUTES, allowedGenres } from "../models/movies.js";
-import Cinema from "../models/cinema.js";
+import Movie, { MAX_MOVIE_MINUTES } from "../models/movies.js";
 import Screen from "../models/screens.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
-import {
-  booleanParam,
-  dayFilter,
-  enumFilter,
-  getPagination,
-  idFilter,
-  sendPage,
-  textParam,
-  timeParam,
-} from "../utils/listQuery.js";
+import { getPagination, sendPage } from "../utils/listQuery.js";
+import { findShowtimes, showtimeFilter } from "../services/showtimeService.js";
 import { deleteShowtimesWhere } from "../utils/cascade.js";
 import { assertSeatsFit } from "../utils/seatLayout.js";
 
@@ -81,53 +72,12 @@ export const createShowtime = catchAsync(async (req, res) => {
   });
 });
 
-// Filters, all optional and combined:
-//   ?movie=<id>  ?screen=<id>  ?cinema=<id>
-//   ?area=downtown   cinemas whose location contains the text
-//   ?genre=Sci-Fi
-//   ?date=2030-03-01 (a UTC day)  ?from=<date-time>  ?to=<date-time>
-//   ?upcoming=true   only showtimes that haven't started
-// Each showtime comes with its movie, screen and the screen's cinema.
+// Filters: see showtimeFilter. Each showtime comes with its movie, screen
+// and the screen's cinema.
 export const getShowtimes = catchAsync(async (req, res) => {
   const pagination = getPagination(req.query);
-  const q = req.query;
-  const conditions = [];
-
-  const movie = idFilter(q, "movie");
-  if (movie) conditions.push({ movie });
-  const screen = idFilter(q, "screen");
-  if (screen) conditions.push({ screen });
-
-  const genre = enumFilter(q, "genre", allowedGenres);
-  if (genre) {
-    conditions.push({ movie: { $in: await Movie.find({ genre }).distinct("_id") } });
-  }
-
-  const cinema = idFilter(q, "cinema");
-  const area = textParam(q, "area");
-  if (cinema || area) {
-    const cinemaFilter = { ...(cinema && { _id: cinema }), ...(area && { location: area }) };
-    const cinemaIds = await Cinema.find(cinemaFilter).distinct("_id");
-    conditions.push({ screen: { $in: await Screen.find({ cinema: { $in: cinemaIds } }).distinct("_id") } });
-  }
-
-  const day = dayFilter(q, "date");
-  if (day) conditions.push({ startTime: day });
-  const from = timeParam(q, "from");
-  if (from) conditions.push({ startTime: { $gte: from } });
-  const to = timeParam(q, "to");
-  if (to) conditions.push({ startTime: { $lt: to } });
-  if (booleanParam(q, "upcoming")) conditions.push({ startTime: { $gt: new Date() } });
-
-  const filter = conditions.length > 0 ? { $and: conditions } : {};
-  const query = Showtime.find(filter)
-    .sort({ startTime: 1, _id: 1 })
-    .skip(pagination.skip)
-    .limit(pagination.limit)
-    .populate("movie")
-    .populate({ path: "screen", populate: { path: "cinema" } });
-
-  await sendPage(res, "showtimes", query, await Showtime.countDocuments(filter), pagination);
+  const filter = await showtimeFilter(req.query);
+  await sendPage(res, "showtimes", findShowtimes(filter, pagination), await Showtime.countDocuments(filter), pagination);
 });
 
 export const getShowtimeById = catchAsync(async (req, res) => {

@@ -1,9 +1,7 @@
 import Booking, {
   API_STATUS_CHANGES,
   BOOKING_STATUSES,
-  MAX_SEATS,
   PAID_STATUSES,
-  SEAT_HOLDING_STATUSES,
   holdsSeats,
 } from "../models/Booking.js";
 import Showtime from "../models/showTime.js";
@@ -13,9 +11,15 @@ import AppError from "../utils/AppError.js";
 import { buildFilter, enumFilter, getPagination, idFilter, sendPage } from "../utils/listQuery.js";
 import { assertSeatsFit } from "../utils/seatLayout.js";
 import { releaseSeats, reserveSeats } from "../utils/showtimeSeats.js";
-import { holdExpiry } from "../utils/bookingHolds.js";
-import { POLICY_TEXT, quoteCancellation } from "../utils/cancellationPolicy.js";
-import { refundPayment } from "../services/refundService.js";
+import {
+  accessFilter,
+  cancelPaidBooking as cancelPaid,
+  cancellationQuoteFor,
+  holdSeats,
+  paidBookingFor,
+  priceFor,
+  quoteSeats,
+} from "../services/bookingService.js";
 
 // A booking holds its seats on its showtime unless it is cancelled, expired
 // or refunded
@@ -23,11 +27,6 @@ const heldSeats = ({ showtime, seats, status }) => ({
   showtime: String(showtime),
   seats: holdsSeats(status) ? seats : [],
 });
-
-// The server always calculates the price; rounded to cents to avoid
-// floating point leftovers like 0.30000000000000004
-const priceFor = (showtimeDoc, seats) =>
-  Math.round(showtimeDoc.price * seats.length * 100) / 100;
 
 const sameSeats = (a, b) =>
   a.length === b.length && [...a].sort().join() === [...b].sort().join();
@@ -56,115 +55,15 @@ const assertAllowedChange = (existing, changes) => {
   }
 };
 
-// Customers can only reach their own bookings; admins can reach all of them.
-// Someone else's booking looks "not found" so its ID isn't confirmed.
-const accessFilter = (req) =>
-  req.user.role === "ADMIN" ? {} : { user: req.user._id };
-
-// Loads a showtime that can still be booked: it exists and hasn't started
-const bookableShowtime = async (id) => {
-  const showtimeDoc = await Showtime.findById(id).populate("screen");
-  if (!showtimeDoc) {
-    throw new AppError("Showtime not found", 404);
-  }
-  if (showtimeDoc.startTime <= new Date()) {
-    throw new AppError("This showtime has already started", 409);
-  }
-  return showtimeDoc;
-};
-
-const takenSeats = (showtimeDoc, seats) => seats.filter((seat) => showtimeDoc.bookedSeats.includes(seat));
-
 // POST /bookings/quote { showtime, seats }: what these seats would cost,
 // calculated by the server, without reserving anything
 export const quoteBooking = catchAsync(async (req, res) => {
-  const { showtime, seats } = req.body;
-  const showtimeDoc = await bookableShowtime(showtime);
-  assertSeatsFit(showtimeDoc.screen, seats, { alreadyBooked: showtimeDoc.bookedSeats.length });
-
-  const taken = takenSeats(showtimeDoc, seats);
-  if (taken.length > 0) {
-    throw new AppError(`Seats already booked: ${taken.join(", ")}`, 409);
-  }
-
-  res.json({
-    status: "success",
-    data: {
-      quote: {
-        showtime: showtimeDoc._id,
-        startTime: showtimeDoc.startTime,
-        seats,
-        pricePerSeat: showtimeDoc.price,
-        totalPrice: priceFor(showtimeDoc, seats),
-        totalCents: Math.round(priceFor(showtimeDoc, seats) * 100),
-        currency: "USD",
-      },
-    },
-  });
+  const quote = await quoteSeats(req.body);
+  res.json({ status: "success", data: { quote } });
 });
 
 export const createBooking = catchAsync(async (req, res) => {
-  const { showtime, seats } = req.body;
-
-  const showtimeDoc = await bookableShowtime(showtime);
-
-  assertSeatsFit(showtimeDoc.screen, seats, {
-    alreadyBooked: showtimeDoc.bookedSeats.length,
-  });
-
-  // Customers can hold at most MAX_SEATS active seats per showtime, across
-  // all their bookings. Admins are exempt, e.g. for group bookings.
-  if (req.user.role !== "ADMIN") {
-    const mine = await Booking.find({
-      user: req.user._id,
-      showtime,
-      status: { $in: SEAT_HOLDING_STATUSES },
-    });
-    const held = mine.reduce((count, booking) => count + booking.seats.length, 0);
-    if (held + seats.length > MAX_SEATS) {
-      throw new AppError(
-        `You can book at most ${MAX_SEATS} seats per showtime (you already have ${held})`,
-        409
-      );
-    }
-  }
-
-  const alreadyTaken = takenSeats(showtimeDoc, seats);
-  if (alreadyTaken.length > 0) {
-    throw new AppError(
-      `Seats already booked: ${alreadyTaken.join(", ")}`,
-      409
-    );
-  }
-
-  const updatedShowtime = await reserveSeats(showtime, seats);
-
-  if (!updatedShowtime) {
-    throw new AppError(
-      "One or more seats are already booked. Please try again.",
-      409
-    );
-  }
-
-  let booking;
-  try {
-    // New bookings always start as pending and hold their seats until
-    // holdExpiresAt; unpaid by then, they expire and the seats come back
-    booking = await Booking.create({
-      ...req.body,
-      user: req.user._id,
-      customerName: req.user.name,
-      customerEmail: req.user.email,
-      status: "pending",
-      holdExpiresAt: holdExpiry(),
-      totalPrice: priceFor(showtimeDoc, seats),
-    });
-  } catch (err) {
-    // Release the seats reserved above so a failed booking doesn't hold them
-    await releaseSeats(showtime, seats);
-    throw err;
-  }
-
+  const booking = await holdSeats(req.user, req.body);
   res.status(201).json({
     status: "success",
     data: { booking },
@@ -175,7 +74,7 @@ export const createBooking = catchAsync(async (req, res) => {
 export const getBookings = catchAsync(async (req, res) => {
   const pagination = getPagination(req.query);
   const filter = {
-    ...accessFilter(req),
+    ...accessFilter(req.user),
     ...buildFilter({
       showtime: idFilter(req.query, "showtime"),
       status: enumFilter(req.query, "status", BOOKING_STATUSES),
@@ -196,7 +95,7 @@ export const getBookings = catchAsync(async (req, res) => {
 export const getBookingById = catchAsync(async (req, res) => {
   const booking = await Booking.findOne({
     _id: req.params.id,
-    ...accessFilter(req),
+    ...accessFilter(req.user),
   }).populate({
     path: "showtime",
     populate: [{ path: "movie" }, { path: "screen" }],
@@ -215,7 +114,7 @@ export const getBookingById = catchAsync(async (req, res) => {
 export const updateBooking = catchAsync(async (req, res) => {
   const existing = await Booking.findOne({
     _id: req.params.id,
-    ...accessFilter(req),
+    ...accessFilter(req.user),
   });
 
   if (!existing) {
@@ -334,64 +233,17 @@ export const deleteBooking = catchAsync(async (req, res) => {
   });
 });
 
-// The paid booking (with its showtime) and its captured payment, for the
-// logged-in user, or a clear refusal
-const paidBookingFor = async (req) => {
-  const booking = await Booking.findOne({ _id: req.params.id, ...accessFilter(req) }).populate("showtime");
-  if (!booking) {
-    throw new AppError("Booking not found", 404);
-  }
-  if (booking.status === "pending") {
-    throw new AppError('This booking isn\'t paid; cancel it with { "status": "cancelled" }, nothing is charged', 409);
-  }
-  if (booking.status !== "confirmed") {
-    throw new AppError(`A ${booking.status} booking can't be cancelled`, 409);
-  }
-  const payment = await Payment.findOne({ booking: booking._id, status: "captured" });
-  if (!payment) {
-    throw new AppError("No completed payment was found for this booking", 409);
-  }
-  return { booking, payment };
-};
-
-const quoteFor = (booking, payment) => ({
-  ...quoteCancellation({ startTime: booking.showtime.startTime, paidCents: payment.amountCents }),
-  paidCents: payment.amountCents,
-  currency: payment.currency,
-  showStartsAt: booking.showtime.startTime,
-  policy: POLICY_TEXT,
-});
-
 // GET /bookings/:id/cancellation-quote: what cancelling this paid booking
 // refunds right now, calculated by the server from the policy
 export const getCancellationQuote = catchAsync(async (req, res) => {
-  const { booking, payment } = await paidBookingFor(req);
-  res.json({ status: "success", data: { quote: quoteFor(booking, payment) } });
+  const { booking, payment } = await paidBookingFor(req.user, req.params.id);
+  res.json({ status: "success", data: { quote: cancellationQuoteFor(booking, payment) } });
 });
 
 // POST /bookings/:id/cancel { confirm: true }: cancels a paid booking and
 // refunds what the policy allows at this moment (not what an earlier quote
 // said). The seats are freed only after PayPal accepted the refund.
 export const cancelPaidBooking = catchAsync(async (req, res) => {
-  const { booking, payment } = await paidBookingFor(req);
-  const quote = quoteFor(booking, payment);
-  if (!quote.allowed) {
-    throw new AppError(`This booking can't be cancelled any more: ${quote.reason.toLowerCase()}`, 409);
-  }
-
-  const refunded = await refundPayment(payment, {
-    fromStatus: "captured",
-    refundCents: quote.refundCents === payment.amountCents ? undefined : quote.refundCents,
-  });
-
-  const cancelled = await Booking.findOneAndUpdate(
-    { _id: booking._id, status: "confirmed" },
-    { status: "refunded" },
-    { returnDocument: "after" }
-  );
-  if (cancelled) {
-    await releaseSeats(booking.showtime._id, booking.seats);
-  }
-
-  res.json({ status: "success", data: { booking: cancelled ?? booking, payment: refunded, quote } });
+  const result = await cancelPaid(req.user, req.params.id);
+  res.json({ status: "success", data: result });
 });
