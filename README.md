@@ -63,9 +63,10 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 
 ```
 .
+├── frontend/                 # The customer web app (React + TypeScript, Vite), built into public/
 ├── server.js                 # Entry point: loads .env, connects to MongoDB, starts listening
 ├── app.js                    # Express app: security middleware, routes, 404 + error handler (Vercel's entry)
-├── vercel.json               # Vercel install command
+├── vercel.json               # Vercel install and build commands, security headers for the web app
 ├── config/
 │   └── db.js                 # MongoDB connection (at startup, or on first request on Vercel); reports failed index builds
 ├── models/                   # Mongoose schemas
@@ -184,6 +185,18 @@ npm start            # plain start
 ```
 
 The server connects to MongoDB first, then logs `Server running on port 5050` (or your `PORT`).
+
+### Web app (React)
+
+The customer web app lives in `frontend/` (React + TypeScript, built with Vite). Pages use addresses after `#` (e.g. `/#/bookings`), so the server only serves one page and page addresses never clash with API paths.
+
+```bash
+npm --prefix frontend ci       # once
+npm run dev                    # terminal 1: the API on http://localhost:5050
+npm --prefix frontend run dev  # terminal 2: the app on http://localhost:5173 (API calls are passed to :5050)
+```
+
+`npm run build` type-checks and builds the app into `public/` (not committed). Vercel runs it on every deploy and serves `public/` as static files with a strict Content Security Policy (`vercel.json`); elsewhere Express serves `public/` itself.
 
 ### Run the tests
 

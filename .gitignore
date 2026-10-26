@@ -1,4 +1,6 @@
 node_modules/
+# The built web app (npm run build)
+/public/
 .env
 .env.*
 !.env.example

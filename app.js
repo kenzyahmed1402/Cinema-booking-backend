@@ -1,4 +1,5 @@
 import express from "express";
+import { fileURLToPath } from "node:url";
 import mongoose from "mongoose";
 import cors from "cors";
 import helmet from "helmet";
@@ -49,6 +50,13 @@ app.get("/health", (req, res) => {
         database: connected ? "connected" : "disconnected",
     });
 });
+
+// The built web app (npm run build). On Vercel, public/ is served as static
+// files before requests reach this app, so this is for other hosts and local
+// runs.
+if (!process.env.VERCEL) {
+    app.use(express.static(fileURLToPath(new URL("./public", import.meta.url))));
+}
 
 // CORS_ORIGIN: comma-separated frontend URLs allowed to call the API from a
 // browser, e.g. http://localhost:5173. Not set: any origin is allowed.
