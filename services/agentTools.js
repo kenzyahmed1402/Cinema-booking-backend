@@ -246,6 +246,34 @@ export const agentTools = {
   },
 };
 
+// A tool argument's rules as JSON Schema, for the model
+const jsonSchema = (rules) => {
+  if (rules.type === "array") {
+    return { type: "array", items: { type: "string" }, ...(rules.maxLength && { maxItems: rules.maxLength }) };
+  }
+  if (rules.type === "ObjectId") {
+    return { type: "string", description: "An ID from an earlier tool result" };
+  }
+  return {
+    type: rules.type,
+    ...(rules.enum && { enum: rules.enum }),
+    ...(rules.maxLength && { maxLength: rules.maxLength }),
+  };
+};
+
+// The tools as function declarations for the model
+export const toolDeclarations = Object.entries(agentTools).map(([name, tool]) => ({
+  name,
+  description: tool.description,
+  parametersJsonSchema: {
+    type: "object",
+    properties: Object.fromEntries(Object.entries(tool.args).map(([arg, rules]) => [arg, jsonSchema(rules)])),
+    required: Object.entries(tool.args)
+      .filter(([, rules]) => rules.required)
+      .map(([arg]) => arg),
+  },
+}));
+
 // Runs one tool for the logged-in user. Unknown tools and invalid arguments
 // are refused with 400, before anything runs.
 export const runTool = async (user, name, args) => {

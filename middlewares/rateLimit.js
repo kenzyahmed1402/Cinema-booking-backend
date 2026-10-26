@@ -33,3 +33,18 @@ export const authLimiter = rateLimit({
   handler: (req, res, next) =>
     next(new AppError("Too many failed attempts. Please try again in 15 minutes.", 429)),
 });
+
+// Limits messages to the assistant per user, on top of the daily cap for all
+// users (AI_DAILY_REQUEST_CAP). Counted by account, so it follows the user
+// across devices and IPs.
+export const chatLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: Number(process.env.AI_USER_MESSAGE_LIMIT) || 30,
+  keyGenerator: (req) => String(req.user._id),
+  store: new MongoRateLimitStore("chat:"),
+  passOnStoreError: true,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: (req, res, next) =>
+    next(new AppError("You've sent a lot of messages to the assistant. Please try again in an hour.", 429)),
+});
