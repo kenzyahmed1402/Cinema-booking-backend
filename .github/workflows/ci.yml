@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    # feature/* branches are tested before they are merged into develop
+    branches: [main, develop, "feature/**"]
   pull_request:
     branches: [main, develop]
 
