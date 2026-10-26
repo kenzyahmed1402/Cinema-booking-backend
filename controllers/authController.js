@@ -1,7 +1,7 @@
 import User from '../models/User.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
-import { createSendToken } from '../middlewares/auth.js';
+import { clearSession, createSendToken } from '../middlewares/auth.js';
 
 export const register = catchAsync(async (req, res) => {
   const { name, email, password } = req.body;
@@ -39,3 +39,9 @@ export const getMe = catchAsync(async (req, res) => {
     data: { user },
   });
 });
+
+// POST /auth/logout: removes the login cookie
+export const logout = (req, res) => {
+  clearSession(res);
+  res.status(204).send();
+};

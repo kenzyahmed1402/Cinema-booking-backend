@@ -252,6 +252,8 @@ Register or log in to get a token, then send it with every request that needs a 
 Authorization: Bearer <token>
 ```
 
+Browsers don't need the header: login and register also set a `cinemate_session` cookie that is **HTTP-only** (page scripts can't read it), **Secure** (HTTPS only, except with `NODE_ENV=development` on localhost) and **SameSite=Strict** (other sites' pages can't send it, which also blocks cross-site request forgery). It expires with the token. `POST /auth/logout` deletes it. When both are sent, the Bearer header wins.
+
 | Situation                         | Response |
 | --------------------------------- | -------- |
 | No token                          | `401`    |
@@ -382,6 +384,7 @@ Access: **Public** = no login · **Logged in** = any user · **Admin** = admin o
 | ------ | ---------------- | --------- | ----------------------------------- |
 | `POST` | `/auth/register` | Public    | Create a customer account, returns a token |
 | `POST` | `/auth/login`    | Public    | Log in, returns a token             |
+| `POST` | `/auth/logout`   | Public    | Delete the browser's login cookie   |
 | `GET`  | `/auth/me`       | Logged in | The current user                    |
 
 | Method | Path      | Access | Description                         |
