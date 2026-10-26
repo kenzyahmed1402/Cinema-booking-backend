@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 import { api, book, bookedSeats, createShowtime, createUser, useTestDatabase } from "./helpers.js";
 import { setModelClient } from "../services/geminiClient.js";
 import { setPayPalClient } from "../services/paypalService.js";
-import { MAX_TOOL_CALLS, systemInstruction } from "../services/agentChat.js";
+import { MAX_TOOL_CALLS, TURN_BUDGET_MS, systemInstruction } from "../services/agentChat.js";
 import AgentProposal from "../models/AgentProposal.js";
 import Booking from "../models/Booking.js";
 import Movie from "../models/movies.js";
@@ -347,6 +347,24 @@ describe("assistant chat limits", () => {
     scriptedModel(ask(...Array.from({ length: MAX_TOOL_CALLS + 1 }, () => ["proposeBooking", {}])));
     assert.match((await send(alice, "Book everything")).body.data.reply, /few steps/);
     assert.equal(await AgentProposal.countDocuments(), 0);
+  });
+
+  it("stops a message that takes longer than its time budget", async (t) => {
+    const { alice } = await setup();
+    t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+    scriptedModel(
+      ask(["searchMovies", {}]),
+      () => {
+        t.mock.timers.tick(TURN_BUDGET_MS + 1000);
+        return ask(["searchMovies", {}]);
+      },
+      say("Never asked")
+    );
+    const res = await send(alice, "Find something");
+    t.mock.timers.reset();
+    assert.equal(res.status, 200);
+    assert.match(res.body.data.reply, /taking me too long/);
+    assert.equal(model.requests.length, 2);
   });
 
   it("needs a login and a non-empty message of at most 1000 characters", async () => {

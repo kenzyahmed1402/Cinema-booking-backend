@@ -12,8 +12,10 @@ import { runTool, toolDeclarations } from "./agentTools.js";
 
 // Most tool calls the model can make for one message
 export const MAX_TOOL_CALLS = 6;
-// Each model call gives up after this long
-export const MODEL_TIMEOUT_MS = 20_000;
+// Each model call gives up after this long, and a whole message after
+// TURN_BUDGET_MS (checked before each model call)
+export const MODEL_TIMEOUT_MS = 45_000;
+export const TURN_BUDGET_MS = 90_000;
 // Turns kept for the model, and chat messages kept for the screen
 const MAX_CONTENTS = 40;
 const MAX_MESSAGES = 50;
@@ -25,6 +27,8 @@ const DAILY_CAP_REACHED =
   "The assistant has reached today's limit. You can still book with the seat picker.";
 const TOO_MANY_STEPS =
   "I couldn't work that out in a few steps. Could you tell me more precisely what you're looking for?";
+const TOO_SLOW =
+  "That's taking me too long. Could you tell me more precisely what you're looking for?";
 
 // The model calls allowed per day across all users, to protect the API quota
 const dailyCap = () => Number(process.env.AI_DAILY_REQUEST_CAP) || 200;
@@ -122,10 +126,16 @@ export const chat = async (user, message) => {
   const conversation = await AgentConversation.findOne({ user: user._id });
   const contents = [...JSON.parse(conversation?.contents ?? "[]"), { role: "user", parts: [{ text: message }] }];
   const cards = [];
+  const started = Date.now();
   let toolCalls = 0;
   let reply;
 
   for (;;) {
+    if (toolCalls > 0 && Date.now() - started > TURN_BUDGET_MS) {
+      reply = TOO_SLOW;
+      contents.push({ role: "model", parts: [{ text: reply }] });
+      break;
+    }
     const response = await askModel(model, contents);
     const calls = response.functionCalls ?? [];
 

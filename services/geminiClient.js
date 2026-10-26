@@ -7,16 +7,21 @@ export const DEFAULT_MODEL = "gemini-3.8-flash";
 // One model call: the conversation so far and the tools it may ask for.
 // Returns the model's turn as it should be stored (`content`), the tool calls
 // it asks for and its text.
+// Gemini 3 models think before answering, by default at length. Choosing
+// tools and answering briefly needs little of it, and it makes each call much
+// faster. timeoutMs is also Google's own deadline for the call.
 const createGeminiClient = (apiKey) => {
   const ai = new GoogleGenAI({ apiKey });
   return {
     generate: async ({ systemInstruction, contents, functionDeclarations, timeoutMs }) => {
+      const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
       const response = await ai.models.generateContent({
-        model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
+        model,
         contents,
         config: {
           systemInstruction,
           tools: [{ functionDeclarations }],
+          ...(model.startsWith("gemini-3") && { thinkingConfig: { thinkingLevel: "low" } }),
           httpOptions: { timeout: timeoutMs },
         },
       });
