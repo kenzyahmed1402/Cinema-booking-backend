@@ -7,6 +7,7 @@ import { releaseSeats, reserveSeats } from "../utils/showtimeSeats.js";
 import { holdExpiry } from "../utils/bookingHolds.js";
 import { POLICY_TEXT, quoteCancellation } from "../utils/cancellationPolicy.js";
 import { refundPayment } from "./refundService.js";
+import { keepGuest } from "./guestService.js";
 
 // The booking rules shared by the REST endpoints and the assistant's tools,
 // so both check and price everything the same way. `user` is always the
@@ -102,8 +103,9 @@ export const holdSeats = async (user, { showtime, seats }) => {
     );
   }
 
+  let booking;
   try {
-    return await Booking.create({
+    booking = await Booking.create({
       showtime,
       seats,
       user: user._id,
@@ -118,6 +120,10 @@ export const holdSeats = async (user, { showtime, seats }) => {
     await releaseSeats(showtime, seats);
     throw err;
   }
+
+  // A guest who books keeps their account
+  await keepGuest(user);
+  return booking;
 };
 
 // The paid booking (with its showtime) and its captured payment, for this

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import AppError from '../utils/AppError.js';
@@ -21,13 +22,38 @@ const cookieOptions = () => ({
   path: '/',
 });
 
-// The session cookie's value from a Cookie header, if there is one
-const sessionCookie = (header) => {
+// A cookie's value from a Cookie header, if there is one
+const cookieValue = (header, name) => {
   const pair = (header ?? '')
     .split(';')
     .map((part) => part.trim())
-    .find((part) => part.startsWith(`${SESSION_COOKIE}=`));
-  return pair ? pair.slice(SESSION_COOKIE.length + 1) : undefined;
+    .find((part) => part.startsWith(`${name}=`));
+  return pair ? pair.slice(name.length + 1) : undefined;
+};
+
+// Visitors who haven't logged in get a random ID in their own cookie, so
+// their chat with the assistant can be kept and moved to their account when
+// they log in. It identifies a browser, never a person, and lasts a day.
+export const VISITOR_COOKIE = 'cinemate_visitor';
+const VISITOR_DAY_MS = 24 * 60 * 60 * 1000;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export const visitorId = (req) => {
+  const value = cookieValue(req.headers.cookie, VISITOR_COOKIE);
+  return value && uuidPattern.test(value) ? value : undefined;
+};
+
+// The visitor's ID, creating it (and its cookie) on first use
+export const ensureVisitorId = (req, res) => {
+  const existing = visitorId(req);
+  if (existing) return existing;
+  const created = randomUUID();
+  res.cookie(VISITOR_COOKIE, created, { ...cookieOptions(), maxAge: VISITOR_DAY_MS });
+  return created;
+};
+
+export const clearVisitor = (res) => {
+  res.clearCookie(VISITOR_COOKIE, cookieOptions());
 };
 
 const signToken = (id) => {
@@ -37,17 +63,20 @@ const signToken = (id) => {
   });
 };
 
-export const protect = catchAsync(async (req, res, next) => {
-  let token;
-
+// The token a request carries: a Bearer header, else the session cookie
+const requestToken = (req) => {
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith('Bearer')
   ) {
-    token = req.headers.authorization.split(' ')[1];
-  } else {
-    token = sessionCookie(req.headers.cookie);
+    return req.headers.authorization.split(' ')[1];
   }
+  return cookieValue(req.headers.cookie, SESSION_COOKIE);
+};
+
+// The logged-in user, or a 401 explaining why not
+const userFromRequest = async (req) => {
+  const token = requestToken(req);
 
   if (!token) {
     throw new AppError('You are not logged in. Please log in to get access.', 401);
@@ -60,7 +89,18 @@ export const protect = catchAsync(async (req, res, next) => {
     throw new AppError('The user belonging to this token no longer exists.', 401);
   }
 
-  req.user = user;
+  return user;
+};
+
+export const protect = catchAsync(async (req, res, next) => {
+  req.user = await userFromRequest(req);
+  next();
+});
+
+// For routes open to everyone: req.user is the logged-in user, or null for a
+// visitor (including one whose login has expired)
+export const identify = catchAsync(async (req, res, next) => {
+  req.user = requestToken(req) ? await userFromRequest(req).catch(() => null) : null;
   next();
 });
 

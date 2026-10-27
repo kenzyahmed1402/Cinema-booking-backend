@@ -12,10 +12,14 @@ export const PROPOSAL_MINUTES = 15;
 // confirmed: done (`result` is the booking it made or cancelled)
 const agentProposalSchema = new mongoose.Schema(
   {
+    // The user it was made for, or the visitor (their cookie's ID) until
+    // they log in; confirming always needs a login
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+    },
+    visitor: {
+      type: String,
     },
     kind: {
       type: String,

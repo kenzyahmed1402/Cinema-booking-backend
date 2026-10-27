@@ -37,6 +37,19 @@ const userSchema = new mongoose.Schema(
       enum: ['CUSTOMER', 'ADMIN'],
       default: 'CUSTOMER',
     },
+    // A guest account: created with one click, without typing an email or
+    // password, and logged in only through its cookie. It can become a
+    // normal account later (POST /auth/upgrade), keeping its bookings.
+    isGuest: {
+      type: Boolean,
+      default: false,
+    },
+    // An unused guest account is deleted after this (TTL index). It's
+    // removed once the guest books or upgrades, so those accounts stay.
+    guestExpiresAt: {
+      type: Date,
+      expires: 0,
+    },
   },
   {
     timestamps: true,

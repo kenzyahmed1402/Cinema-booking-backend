@@ -1,4 +1,4 @@
-import { rateLimit } from "express-rate-limit";
+import { ipKeyGenerator, rateLimit } from "express-rate-limit";
 import AppError from "../utils/AppError.js";
 import { MongoRateLimitStore } from "../utils/rateLimitStore.js";
 
@@ -34,17 +34,38 @@ export const authLimiter = rateLimit({
     next(new AppError("Too many failed attempts. Please try again in 15 minutes.", 429)),
 });
 
-// Limits messages to the assistant per user, on top of the daily cap for all
-// users (AI_DAILY_REQUEST_CAP). Counted by account, so it follows the user
-// across devices and IPs.
+// Limits new guest accounts per IP, so a script can't create thousands
+export const guestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: Number(process.env.GUEST_ACCOUNT_LIMIT) || 10,
+  store: new MongoRateLimitStore("guest:"),
+  passOnStoreError: true,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: (req, res, next) =>
+    next(new AppError("Too many guest accounts from this network. Please try again later or create an account.", 429)),
+});
+
+// Limits messages to the assistant, on top of the daily cap for all users
+// (AI_DAILY_REQUEST_CAP): per account for logged-in users, so it follows them
+// across devices, and more strictly per IP for visitors, who could otherwise
+// clear their cookie and start again.
 export const chatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  limit: Number(process.env.AI_USER_MESSAGE_LIMIT) || 30,
-  keyGenerator: (req) => String(req.user._id),
+  limit: (req) =>
+    req.user ? Number(process.env.AI_USER_MESSAGE_LIMIT) || 30 : Number(process.env.AI_VISITOR_MESSAGE_LIMIT) || 10,
+  keyGenerator: (req) => (req.user ? `user:${req.user._id}` : `ip:${ipKeyGenerator(req.ip)}`),
   store: new MongoRateLimitStore("chat:"),
   passOnStoreError: true,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   handler: (req, res, next) =>
-    next(new AppError("You've sent a lot of messages to the assistant. Please try again in an hour.", 429)),
+    next(
+      new AppError(
+        req.user
+          ? "You've sent a lot of messages to the assistant. Please try again in an hour."
+          : "You've sent a lot of messages to the assistant. Log in or continue as a guest to keep chatting.",
+        429
+      )
+    ),
 });

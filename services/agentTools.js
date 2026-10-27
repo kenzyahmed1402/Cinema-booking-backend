@@ -19,6 +19,8 @@ import { cancellationQuoteFor, paidBookingFor, quoteSeats } from "./bookingServi
 // The user is always the logged-in one, passed in by the server, never taken
 // from the model. The assistant acts as a customer even for admins: it only
 // sees the user's own bookings and payments, and the customer limits apply.
+// Visitors who haven't logged in can search and get booking cards; the
+// tools about bookings and payments ask them to log in first.
 
 const MAX_RESULTS = 20;
 const MINUTE = 60 * 1000;
@@ -37,7 +39,18 @@ const localTime = (date) =>
     hourCycle: "h23",
   }).format(date);
 
-const asCustomer = (user) => ({ _id: user._id, name: user.name, email: user.email, role: "CUSTOMER" });
+const asCustomer = (user) => user && { _id: user._id, name: user.name, email: user.email, role: "CUSTOMER" };
+
+// Told to the model when a visitor asks about bookings, so it can explain
+const LOGIN_NEEDED =
+  "The customer isn't logged in. To see or change bookings they need to log in, create an account or continue as a guest (buttons in the app).";
+
+const requireUser = (user) => {
+  if (!user) {
+    throw new AppError(LOGIN_NEEDED, 401);
+  }
+  return user;
+};
 
 const showtimeSummary = (showtime) => ({
   showtime: String(showtime._id),
@@ -136,7 +149,7 @@ export const agentTools = {
     description: "The customer's own bookings, newest first, at most 10. Optional status filter.",
     args: { status: { type: "string", enum: BOOKING_STATUSES } },
     run: async (user, { status }) => {
-      const bookings = await Booking.find({ user: user._id, ...(status && { status }) })
+      const bookings = await Booking.find({ user: requireUser(user)._id, ...(status && { status }) })
         .sort({ createdAt: -1, _id: -1 })
         .limit(10)
         .populate({ path: "showtime", populate: [{ path: "movie" }, { path: "screen", populate: { path: "cinema" } }] });
@@ -158,7 +171,7 @@ export const agentTools = {
     description: "The payment status of one of the customer's own bookings.",
     args: { booking: bookingId },
     run: async (user, { booking }) => {
-      const payment = await Payment.findOne({ booking, user: user._id }).sort({ createdAt: -1 });
+      const payment = await Payment.findOne({ booking, user: requireUser(user)._id }).sort({ createdAt: -1 });
       if (!payment) {
         return { booking, payment: null };
       }
@@ -170,7 +183,7 @@ export const agentTools = {
     description: "What cancelling one of the customer's paid bookings would refund right now, under the policy.",
     args: { booking: bookingId },
     run: async (user, { booking }) => {
-      const found = await paidBookingFor(asCustomer(user), booking);
+      const found = await paidBookingFor(asCustomer(requireUser(user)), booking);
       return { booking, ...cancellationQuoteFor(found.booking, found.payment) };
     },
   },
@@ -180,7 +193,7 @@ export const agentTools = {
       "Show the customer a booking card for these seats. Reserves nothing: the customer confirms with the " +
       "card's button, and the server checks the seats and price again then.",
     args: bookingSchema,
-    run: async (user, { showtime, seats }) => {
+    run: async (user, { showtime, seats }, { visitor }) => {
       const quote = await quoteSeats({ showtime, seats });
       const doc = await loadShowtime(showtime);
       const expiresAt = proposalExpiry();
@@ -193,7 +206,7 @@ export const agentTools = {
         expiresAt,
       };
       const proposal = await AgentProposal.create({
-        user: user._id,
+        ...(user ? { user: user._id } : { visitor }),
         kind: "booking",
         showtime,
         seats,
@@ -211,7 +224,7 @@ export const agentTools = {
       "now. Cancels nothing: the customer confirms with the card's button.",
     args: { booking: bookingId },
     run: async (user, { booking }) => {
-      const found = await paidBookingFor(asCustomer(user), booking);
+      const found = await paidBookingFor(asCustomer(requireUser(user)), booking);
       const quote = cancellationQuoteFor(found.booking, found.payment);
       if (!quote.allowed) {
         throw new AppError(`This booking can't be cancelled any more: ${quote.reason.toLowerCase()}`, 409);
@@ -274,13 +287,17 @@ export const toolDeclarations = Object.entries(agentTools).map(([name, tool]) =>
   },
 }));
 
-// Runs one tool for the logged-in user. Unknown tools and invalid arguments
-// are refused with 400, before anything runs.
-export const runTool = async (user, name, args) => {
+// Runs one tool for the logged-in user, or for a visitor (user null, their
+// cookie's ID as visitor). Unknown tools and invalid arguments are refused
+// with 400, before anything runs.
+export const runTool = async (user, name, args, { visitor } = {}) => {
   const tool = Object.hasOwn(agentTools, name) ? agentTools[name] : undefined;
   if (!tool) {
     throw new AppError(`Unknown tool: ${String(name).slice(0, 50)}`, 400);
   }
   const checked = checkFields(tool.args, args && typeof args === "object" && !Array.isArray(args) ? args : {});
-  return tool.run(asCustomer(user), checked);
+  if (!user && !visitor) {
+    throw new AppError(LOGIN_NEEDED, 401);
+  }
+  return tool.run(asCustomer(user), checked, { visitor });
 };

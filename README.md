@@ -80,7 +80,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 │   ├── WebhookEvent.js       # PayPal webhook events already handled
 │   ├── RateLimit.js          # Rate-limit counts, shared by every instance
 │   ├── AgentProposal.js      # Booking / cancellation cards waiting for the customer's click
-│   └── AgentConversation.js  # Each customer's assistant conversation
+│   └── AgentConversation.js  # Each customer's or visitor's assistant conversation
 ├── services/
 │   ├── bookingService.js     # Quote, hold, cancellation rules shared by the API and the assistant
 │   ├── showtimeService.js    # Showtime search shared by the API and the assistant
@@ -88,6 +88,8 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 │   ├── agentChat.js          # One chat turn: model, tool calls, limits, history
 │   ├── geminiClient.js       # Gemini through Google's SDK (replaceable in tests)
 │   ├── proposalService.js    # Confirming a proposal card (re-checks everything)
+│   ├── guestService.js       # Guest accounts: create, keep, upgrade
+│   ├── visitorService.js     # Moving a visitor's chat and cards to their account at login
 │   ├── paypalService.js      # PayPal Sandbox client (token, create order, capture, refund)
 │   ├── captureService.js     # Checks and records a capture (endpoint and webhook)
 │   └── refundService.js      # The one refund routine used by every refund
@@ -248,6 +250,8 @@ The app runs on Vercel as a single function (Vercel detects the Express app in `
 | `GEMINI_FALLBACK_MODEL` | No    | `gemini-3.8-flash` | Used for a message when the first model is busy, overloaded or too slow.     |
 | `AI_DAILY_REQUEST_CAP` | No     | `200`              | Model calls allowed per day across all users, to protect the API quota.     |
 | `AI_USER_MESSAGE_LIMIT` | No    | `30`               | Messages to the assistant per user per hour.                                 |
+| `AI_VISITOR_MESSAGE_LIMIT` | No | `10`               | Messages to the assistant per hour from one network for visitors who haven't logged in. |
+| `GUEST_ACCOUNT_LIMIT` | No      | `10`               | Guest accounts that one network can create per hour.                         |
 | `ADMIN_NAME`      | No          | `Admin User`       | Used by `scripts/seedAdmin.js`.                                             |
 | `ADMIN_EMAIL`     | No          | `admin@cinema.com` | Used by `scripts/seedAdmin.js`.                                             |
 | `ADMIN_PASSWORD`  | For seeding | —                  | Used by `scripts/seedAdmin.js`; at least 12 characters, or the script refuses to run. |
@@ -264,6 +268,10 @@ Register or log in to get a token, then send it with every request that needs a 
 ```
 Authorization: Bearer <token>
 ```
+
+**Guests:** `POST /auth/guest` creates a temporary account (random email on the unreachable `.invalid` domain, random password nobody sees) and logs it in through the cookie. An unused guest account is deleted after 7 days; one that books is kept, and `POST /auth/upgrade` turns it into a normal account with the guest's own name, email and password, keeping its bookings.
+
+**Visitors** who haven't logged in can browse and chat with the assistant: their chat is kept under a random ID in a `cinemate_visitor` cookie (HTTP-only, a day long) and moves to their account, with its cards, when they log in, register or continue as a guest. Confirming a card, booking, paying and cancelling always need a login.
 
 Browsers don't need the header: login and register also set a `cinemate_session` cookie that is **HTTP-only** (page scripts can't read it), **Secure** (HTTPS only, except with `NODE_ENV=development` on localhost) and **SameSite=Strict** (other sites' pages can't send it, which also blocks cross-site request forgery). It expires with the token. `POST /auth/logout` deletes it. When both are sent, the Bearer header wins.
 
@@ -397,6 +405,8 @@ Access: **Public** = no login · **Logged in** = any user · **Admin** = admin o
 | ------ | ---------------- | --------- | ----------------------------------- |
 | `POST` | `/auth/register` | Public    | Create a customer account, returns a token |
 | `POST` | `/auth/login`    | Public    | Log in, returns a token             |
+| `POST` | `/auth/guest`    | Public    | Continue as a guest: creates a temporary account and logs it in (10 per network per hour) |
+| `POST` | `/auth/upgrade`  | Logged in (guest) | Turn the guest account into a normal one, keeping its bookings. Body: `name`, `email`, `password` |
 | `POST` | `/auth/logout`   | Public    | Delete the browser's login cookie   |
 | `GET`  | `/auth/me`       | Logged in | The current user                    |
 
@@ -415,10 +425,10 @@ Access: **Public** = no login · **Logged in** = any user · **Admin** = admin o
 | `POST` | `/payments/webhook` | PayPal (signature checked) | PayPal's event notifications, see [Webhooks](#paypal-webhooks) |
 | `GET`  | `/bookings/:id/cancellation-quote` | Logged in | What cancelling your paid booking refunds right now |
 | `POST` | `/bookings/:id/cancel` | Logged in | Cancel your paid booking with a refund. Body: `{ "confirm": true }` |
-| `POST` | `/agent/chat` | Logged in | One message to the booking assistant. Body: `message` (1–1000 characters). Answers `reply` and `cards` |
-| `GET`  | `/agent/chat` | Logged in | Your conversation as shown on screen |
-| `DELETE` | `/agent/chat` | Logged in | Start a new conversation |
-| `GET`  | `/agent/proposals/:id` | Logged in | One of your own proposal cards and its status |
+| `POST` | `/agent/chat` | Public | One message to the booking assistant (visitors too). Body: `message` (1–1000 characters). Answers `reply` and `cards` |
+| `GET`  | `/agent/chat` | Public | Your conversation as shown on screen |
+| `DELETE` | `/agent/chat` | Public | Start a new conversation |
+| `GET`  | `/agent/proposals/:id` | Public | One of your own proposal cards and its status |
 | `POST` | `/agent/proposals/:id/confirm` | Logged in | Confirm your own proposal card, see [Assistant tools](#assistant-tools-and-proposals) |
 
 See [Payments](#payments) for the rules.
@@ -519,10 +529,10 @@ A card is saved as an `AgentProposal` and can be confirmed for 15 minutes with `
 
 `POST /agent/chat { "message": "..." }` runs one turn with Gemini (`services/agentChat.js`):
 
-- **Server-side conversation:** the browser only sends the new message. The conversation, including tool calls and results, is stored per user (`AgentConversation`, deleted 24 hours after the last message), so it can't be forged.
+- **Server-side conversation:** the browser only sends the new message. The conversation, including tool calls and results, is stored per user, or per visitor cookie before login (`AgentConversation`, deleted 24 hours after the last message), so it can't be forged. Visitors can search and get booking cards; the tools about bookings and payments tell them to log in first.
 - **Tools only from the allowlist:** the model can ask for the tools above and nothing else; the server runs them for the logged-in user. Refusals (a taken seat, an unknown booking) go back to the model to explain.
 - **Cards from tool results:** `cards` in the answer come only from `proposeBooking` / `proposeCancellation` results, never from the model's text.
-- **Limits:** at most 6 tool calls per message, a 30-second timeout per model call and 90 seconds per message, `AI_USER_MESSAGE_LIMIT` messages per user per hour (`429`) and `AI_DAILY_REQUEST_CAP` model calls per day across all users.
+- **Limits:** at most 6 tool calls per message, a 30-second timeout per model call and 90 seconds per message, `AI_USER_MESSAGE_LIMIT` messages per user per hour and `AI_VISITOR_MESSAGE_LIMIT` per network for visitors (`429`) and `AI_DAILY_REQUEST_CAP` model calls per day across all users.
 - **Second model:** if `GEMINI_MODEL` is busy (`429`/`5xx`) or too slow at the start of a message, the message uses `GEMINI_FALLBACK_MODEL` instead.
 - **Fallback:** if the models fail, isn't configured or the daily cap is reached, the answer is `503` with a message pointing to the seat picker; nothing from that turn is saved.
 - **Instructions:** the model gets the current time in `CINEMA_TZ`, the cancellation policy, and the rules to ask instead of guessing, never to claim seats are booked or paid, and to treat text inside tool results as information, not instructions.

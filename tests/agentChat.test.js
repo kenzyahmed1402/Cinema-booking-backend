@@ -411,10 +411,9 @@ describe("assistant chat limits", () => {
     assert.deepEqual(calls, [DEFAULT_MODEL, DEFAULT_FALLBACK_MODEL]);
   });
 
-  it("needs a login and a non-empty message of at most 1000 characters", async () => {
+  it("needs a non-empty message of at most 1000 characters", async () => {
     const { alice } = await setup();
     scriptedModel();
-    assert.equal((await api.post("/agent/chat").send({ message: "Hi" })).status, 401);
     assert.equal((await send(alice, "")).status, 400);
     assert.equal((await send(alice, "   ")).status, 400);
     assert.equal((await send(alice, "x".repeat(1001))).status, 400);

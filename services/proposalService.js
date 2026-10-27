@@ -7,11 +7,25 @@ import { cancelPaidBooking, formatCents, holdSeats, quoteSeats } from "./booking
 // is checked again here, against the database, before seats are held or a
 // refund is requested; the card's numbers are only what the customer agreed to.
 
-// The user's own proposal; someone else's looks "not found"
-export const findProposal = async (user, id) => {
-  const proposal = await AgentProposal.findOne({ _id: id, user: user._id });
+// A proposal of this user, or of this visitor before they logged in;
+// someone else's looks "not found"
+export const findProposal = async ({ user, visitor }, id) => {
+  const owners = [...(user ? [{ user: user._id }] : []), ...(visitor ? [{ visitor }] : [])];
+  const proposal = owners.length > 0 ? await AgentProposal.findOne({ _id: id, $or: owners }) : null;
   if (!proposal) {
     throw new AppError("Proposal not found", 404);
+  }
+  return proposal;
+};
+
+// The logged-in user's proposal. A card made while they were a visitor (same
+// browser) becomes theirs now.
+const claimProposal = async (user, visitor, id) => {
+  const proposal = await findProposal({ user, visitor }, id);
+  if (!proposal.user) {
+    await AgentProposal.updateOne({ _id: proposal._id, visitor }, { $set: { user: user._id }, $unset: { visitor: 1 } });
+    proposal.user = user._id;
+    proposal.visitor = undefined;
   }
   return proposal;
 };
@@ -44,8 +58,8 @@ const confirmCancellation = async (user, proposal) => {
 
 // Confirms a proposal once. Confirming it again returns what the first
 // confirm did, so a double click can't book or refund twice.
-export const confirmProposal = async (user, id) => {
-  const proposal = await findProposal(user, id);
+export const confirmProposal = async (user, id, { visitor } = {}) => {
+  const proposal = await claimProposal(user, visitor, id);
   if (proposal.status === "confirmed") {
     return confirmedResult(proposal);
   }
