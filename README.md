@@ -192,6 +192,8 @@ The server connects to MongoDB first, then logs `Server running on port 5050` (o
 
 The customer web app lives in `frontend/` (React + TypeScript, built with Vite). Pages use addresses after `#` (e.g. `/#/bookings`), so the server only serves one page and page addresses never clash with API paths.
 
+Anyone can browse what's on and talk to the assistant without an account. Booking, paying, cancelling and My bookings open a dialog to log in, create an account or continue as a guest. Fonts (Inter, Space Grotesk; SIL Open Font License) are bundled with the app, so no third-party font service is called. Showtimes are shown in the cinemas' time zone, `Africa/Cairo` unless `VITE_CINEMA_TZ` is set at build time.
+
 ```bash
 npm --prefix frontend ci       # once
 npm run dev                    # terminal 1: the API on http://localhost:5050

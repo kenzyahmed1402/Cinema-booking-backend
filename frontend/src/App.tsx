@@ -1,63 +1,88 @@
 import { useEffect } from "react";
 import { useAuth } from "./auth";
-import { go, usePage, type Page } from "./route";
-import { AuthPage } from "./pages/AuthPage";
+import { go, href, useRoute, type Page } from "./route";
+import { Home } from "./pages/Home";
 
 const NAV: { page: Page; label: string }[] = [
+  { page: "home", label: "What's on" },
   { page: "chat", label: "Assistant" },
-  { page: "browse", label: "Browse" },
   { page: "bookings", label: "My bookings" },
 ];
 
 // A page that arrives in a later step
-const Placeholder = ({ title }: { title: string }) => (
-  <main className="card">
+const Placeholder = ({ title, text }: { title: string; text: string }) => (
+  <main className="placeholder glass">
     <h1>{title}</h1>
-    <p className="muted">Coming soon.</p>
+    <p className="muted">{text}</p>
+    <a className="button secondary" href={href("home")}>
+      Back to what's on
+    </a>
   </main>
 );
 
 export const App = () => {
-  const { user, logout } = useAuth();
-  const page = usePage();
-  const publicPage = page === "login" || page === "register";
+  const { user, logout, requireUser } = useAuth();
+  const route = useRoute();
 
-  // Every page except log in and register needs an account
+  // My bookings needs an account: ask for one, or go back home
   useEffect(() => {
-    if (user === null && !publicPage) go("login");
-    if (user && publicPage) go("chat");
-  }, [user, publicPage]);
-
-  if (user === undefined) {
-    return <p className="loading">Loading…</p>;
-  }
+    if (route.page === "bookings" && user === null) {
+      requireUser("Log in to see your bookings").then((next) => {
+        if (!next) go("home");
+      });
+    }
+  }, [route.page, user, requireUser]);
 
   return (
     <div className="app">
-      <header className="topbar">
-        <a className="brand" href="#/chat">
-          CineMate
+      <div className="backdrop" aria-hidden="true" />
+      <header className="topbar glass">
+        <a className="brand" href={href("home")}>
+          <span className="logo-mark" aria-hidden="true" />
+          <span>
+            Cine<span className="gradient-text">Mate</span>
+          </span>
         </a>
-        {user && (
-          <nav aria-label="Main">
-            {NAV.map((item) => (
-              <a key={item.page} href={`#/${item.page}`} aria-current={page === item.page ? "page" : undefined}>
-                {item.label}
-              </a>
-            ))}
-            <button type="button" className="link" onClick={() => logout()}>
-              Log out
+        <nav aria-label="Main">
+          {NAV.map((item) => (
+            <a key={item.page} href={href(item.page)} aria-current={route.page === item.page ? "page" : undefined}>
+              {item.label}
+            </a>
+          ))}
+        </nav>
+        <div className="account">
+          {user === undefined ? null : user ? (
+            <>
+              <span className="user-name">
+                {user.isGuest ? "Guest" : user.name}
+                {user.isGuest && <span className="badge">temporary</span>}
+              </span>
+              <button type="button" className="button ghost small" onClick={() => logout()}>
+                Log out
+              </button>
+            </>
+          ) : (
+            <button type="button" className="button ghost small" onClick={() => requireUser("Welcome to CineMate")}>
+              Log in
             </button>
-          </nav>
-        )}
+          )}
+        </div>
       </header>
 
-      {publicPage && <AuthPage mode={page} />}
-      {user && page === "chat" && <Placeholder title="Assistant" />}
-      {user && page === "browse" && <Placeholder title="Browse showtimes" />}
-      {user && page === "bookings" && <Placeholder title="My bookings" />}
+      {route.page === "home" && <Home />}
+      {route.page === "chat" && (
+        <Placeholder title="Assistant" text="The chat with booking cards arrives in the next step." />
+      )}
+      {route.page === "showtime" && (
+        <Placeholder title="Choose your seats" text="The seat picker arrives in a later step." />
+      )}
+      {route.page === "bookings" && user && (
+        <Placeholder title="My bookings" text="Your bookings, payments and cancellations arrive in a later step." />
+      )}
 
-      <footer className="muted">Demo with fictional movies. Payments use the PayPal Sandbox: no real money.</footer>
+      <footer className="footer muted">
+        Fictional movies and cinemas. Payments use the PayPal Sandbox: no real money is charged.
+      </footer>
     </div>
   );
 };

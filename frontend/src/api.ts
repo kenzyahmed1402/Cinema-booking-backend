@@ -39,9 +39,4 @@ export const api = async <T>(method: Method, path: string, body?: unknown): Prom
 export const errorMessage = (err: unknown) =>
   err instanceof Error ? err.message : "Something went wrong. Please try again.";
 
-export type User = {
-  _id: string;
-  name: string;
-  email: string;
-  role: "CUSTOMER" | "ADMIN";
-};
+export type { User } from "./types";
