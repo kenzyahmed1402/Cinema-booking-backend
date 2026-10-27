@@ -28,6 +28,21 @@ app.set("trust proxy", Number(process.env.TRUST_PROXY) || 0);
 // Standard security headers
 app.use(helmet());
 
+// The built web app (npm run build), with helmet's security headers. Served
+// here on every host, Vercel included: the fixed path below lets Vercel's
+// bundler include public/ with the app. Before the database connection and
+// the rate limits, so pages load without either. Built files have content
+// hashes in their names, so browsers may keep them for a year.
+app.use(
+    express.static(fileURLToPath(new URL("./public", import.meta.url)), {
+        setHeaders: (res, filePath) => {
+            if (filePath.includes("/assets/")) {
+                res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+            }
+        },
+    })
+);
+
 // On Vercel, server.js doesn't run: the settings are checked when the app
 // loads and the database is connected on the first request. Seat holds
 // still expire, because every route that reads or books seats expires
@@ -50,13 +65,6 @@ app.get("/health", (req, res) => {
         database: connected ? "connected" : "disconnected",
     });
 });
-
-// The built web app (npm run build). On Vercel, public/ is served as static
-// files before requests reach this app, so this is for other hosts and local
-// runs.
-if (!process.env.VERCEL) {
-    app.use(express.static(fileURLToPath(new URL("./public", import.meta.url))));
-}
 
 // CORS_ORIGIN: comma-separated frontend URLs allowed to call the API from a
 // browser, e.g. http://localhost:5173. Not set: any origin is allowed.

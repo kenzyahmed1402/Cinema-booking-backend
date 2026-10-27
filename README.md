@@ -66,7 +66,7 @@ It handles the full chain from venue setup to ticket sales: admins create **cine
 ├── frontend/                 # The customer web app (React + TypeScript, Vite), built into public/
 ├── server.js                 # Entry point: loads .env, connects to MongoDB, starts listening
 ├── app.js                    # Express app: security middleware, routes, 404 + error handler (Vercel's entry)
-├── vercel.json               # Vercel install and build commands, security headers for the web app
+├── vercel.json               # Vercel install and build commands
 ├── config/
 │   └── db.js                 # MongoDB connection (at startup, or on first request on Vercel); reports failed index builds
 ├── models/                   # Mongoose schemas
@@ -196,7 +196,7 @@ npm run dev                    # terminal 1: the API on http://localhost:5050
 npm --prefix frontend run dev  # terminal 2: the app on http://localhost:5173 (API calls are passed to :5050)
 ```
 
-`npm run build` type-checks and builds the app into `public/` (not committed). Vercel runs it on every deploy and serves `public/` as static files with a strict Content Security Policy (`vercel.json`); elsewhere Express serves `public/` itself.
+`npm run build` type-checks and builds the app into `public/` (not committed). Vercel runs it on every deploy; Express serves `public/` on every host, with helmet's security headers (including a Content Security Policy that only allows the site's own scripts) and a one-year cache for the content-hashed files in `public/assets/`.
 
 ### Run the tests
 
