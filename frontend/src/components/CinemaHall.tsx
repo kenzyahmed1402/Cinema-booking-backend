@@ -10,6 +10,7 @@ type Props = {
   seatsPerRow: number;
   stateOf: (row: string, seat: number) => SeatState;
   label: string;
+  className?: string;
 };
 
 const rowLetter = (index: number) => String.fromCharCode(65 + index);
@@ -20,8 +21,8 @@ const aisleBefore = (seat: number, seatsPerRow: number) => {
   return seat === block + 1 || seat === seatsPerRow - block + 1;
 };
 
-export const CinemaHall = ({ rows, seatsPerRow, stateOf, label }: Props) => (
-  <div className="hall-stage" role="img" aria-label={label}>
+export const CinemaHall = ({ rows, seatsPerRow, stateOf, label, className }: Props) => (
+  <div className={className ? `hall-stage ${className}` : "hall-stage"} role="img" aria-label={label}>
     <div className="hall-camera">
       <div className="hall-screen" />
       <div className="hall-floor">

@@ -41,3 +41,74 @@ export type Showtime = {
   movie: Movie;
   screen: Screen;
 };
+
+// GET /showTimes/:id/seats: rows A.. and seats 1..; `taken` is booked or held
+export type SeatMap = {
+  showtime: string;
+  rows: number | null;
+  seatsPerRow: number | null;
+  taken: string[];
+  available: number;
+};
+
+// A card the assistant proposes; nothing happens until the customer confirms
+export type BookingCard = {
+  type: "booking";
+  proposal: string;
+  showtime: string;
+  movie?: string;
+  genre?: string;
+  cinema?: string;
+  screen?: number;
+  startTime: string;
+  localTime: string;
+  seats: string[];
+  totalCents: number;
+  currency: string;
+  expiresAt: string;
+};
+
+export type CancellationCard = {
+  type: "cancellation";
+  proposal: string;
+  booking: string;
+  movie?: string;
+  genre?: string;
+  cinema?: string;
+  startTime: string;
+  localTime: string;
+  seats: string[];
+  paidCents: number;
+  refundCents: number;
+  refundPercent: number;
+  currency: string;
+  policy: string;
+  expiresAt: string;
+};
+
+export type ProposalCard = BookingCard | CancellationCard;
+
+export type ChatMessage = {
+  role: "user" | "assistant";
+  text: string;
+  cards?: ProposalCard[];
+  at?: string;
+};
+
+// GET /agent/proposals/:id
+export type Proposal = {
+  id: string;
+  kind: "booking" | "cancellation";
+  status: "open" | "confirming" | "confirmed";
+  expiresAt: string;
+  result?: string;
+};
+
+// The booking a confirmed card made or cancelled
+export type Booking = {
+  _id: string;
+  seats: string[];
+  status: string;
+  totalPrice: number;
+  holdExpiresAt?: string;
+};

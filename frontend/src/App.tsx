@@ -3,6 +3,7 @@ import { Armchair, ArrowLeft, Film, LogIn, LogOut, Sparkles, Ticket, UserRound, 
 import { useAuth } from "./auth";
 import { go, href, useRoute, type Page } from "./route";
 import { Home } from "./pages/Home";
+import { Chat } from "./pages/Chat";
 
 const NAV: { page: Page; label: string; icon: LucideIcon }[] = [
   { page: "home", label: "What's on", icon: Film },
@@ -28,6 +29,20 @@ export const App = () => {
   const { user, logout, requireUser } = useAuth();
   const route = useRoute();
   const main = useRef<HTMLElement>(null);
+  const header = useRef<HTMLElement>(null);
+
+  // The header's real height (it wraps on phones), so full-height pages
+  // like the assistant fit the screen below it
+  useEffect(() => {
+    const element = header.current;
+    if (!element) return;
+    const measure = () =>
+      document.documentElement.style.setProperty("--header-h", `${element.getBoundingClientRect().height}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   // My bookings needs an account: ask for one, or go back home
   useEffect(() => {
@@ -49,7 +64,7 @@ export const App = () => {
       <a className="skip-link" href="#main" onClick={skip}>
         Skip to content
       </a>
-      <header className="topbar">
+      <header className="topbar" ref={header}>
         <div className="wrap topbar-inner">
           <a className="brand" href={href("home")}>
             <span className="logo-mark" aria-hidden="true" />
@@ -86,9 +101,7 @@ export const App = () => {
 
       <main id="main" className="wrap" ref={main} tabIndex={-1}>
         {route.page === "home" && <Home />}
-        {route.page === "chat" && (
-          <Placeholder icon={Sparkles} title="Assistant" text="The chat with booking cards arrives next." />
-        )}
+        {route.page === "chat" && <Chat initial={route.query.get("q") ?? undefined} />}
         {route.page === "showtime" && (
           <Placeholder icon={Armchair} title="Choose your seats" text="The 3D seat picker arrives in a later step." />
         )}

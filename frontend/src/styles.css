@@ -77,7 +77,8 @@ a {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -1057,6 +1058,577 @@ nav a[aria-current="page"]::after {
   border-color: transparent;
 }
 
+/* ---------- assistant ---------- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+.chat-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  gap: 24px;
+  align-items: start;
+  padding-top: 24px;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--header-h, 69px) - 48px);
+  min-height: 440px;
+  overflow: hidden;
+  --notch: var(--card);
+}
+
+.chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chat-head h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.35rem;
+}
+
+.chat-head h1 svg,
+.panel-title svg {
+  color: var(--accent);
+}
+
+.chat-stream {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.chat-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin: auto 0;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.chat-empty h2 {
+  font-size: 1.6rem;
+}
+
+.chat-hints {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 18px;
+  font-size: 0.9rem;
+}
+
+.chat-empty .chips {
+  justify-content: center;
+  margin-top: 8px;
+}
+
+@keyframes msgIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.msg {
+  display: flex;
+  gap: 12px;
+  max-width: 100%;
+}
+
+.msg.new {
+  animation: msgIn 0.7s var(--ease-out) both;
+}
+
+.msg.user {
+  justify-content: flex-end;
+}
+
+.msg-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--accent);
+}
+
+.msg-content {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  max-width: min(640px, 100%);
+}
+
+.msg-text {
+  display: grid;
+  gap: 10px;
+  color: var(--body);
+}
+
+.msg-text ul,
+.msg-text ol {
+  display: grid;
+  gap: 4px;
+  padding-left: 20px;
+}
+
+.msg-text ul {
+  list-style: disc;
+}
+
+.msg-text ol {
+  list-style: decimal;
+}
+
+.msg-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.msg.user .msg-text {
+  padding: 10px 16px;
+  border-radius: 18px 18px 4px 18px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+@keyframes dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: none;
+  }
+  40% {
+    opacity: 1;
+    transform: translate3d(0, -3px, 0);
+  }
+}
+
+.dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+}
+
+.dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: dot 1.3s var(--ease) infinite;
+}
+
+.dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.chat-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 20px 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin: 0 16px 16px;
+  padding: 8px 8px 8px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 24px;
+  background: var(--bg);
+  transition: border-color 0.25s var(--ease);
+}
+
+.composer:focus-within {
+  border-color: var(--accent);
+}
+
+.composer textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 160px;
+  padding: 9px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: none;
+  field-sizing: content;
+}
+
+.composer textarea::placeholder {
+  color: var(--muted);
+}
+
+.composer textarea:focus-visible {
+  outline: none;
+}
+
+.send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+  transition: background-color 0.25s var(--ease);
+}
+
+.send:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.send:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.chat-panel {
+  position: sticky;
+  top: calc(var(--header-h, 69px) + 24px);
+  display: grid;
+  gap: 14px;
+  --notch: var(--bg);
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.25rem;
+}
+
+.panel-empty {
+  display: grid;
+  justify-items: stretch;
+  text-align: center;
+  gap: 8px;
+  padding: 8px 16px 24px;
+}
+
+/* ---------- tickets: the assistant's cards ---------- */
+
+.ticket {
+  position: relative;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--raised);
+}
+
+.ticket-main {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+}
+
+.ticket .poster.small {
+  width: 64px;
+}
+
+.ticket-body {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ticket-body h3 {
+  font-size: 1.25rem;
+}
+
+.ticket-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ticket-kind.cancel {
+  color: var(--danger);
+}
+
+.ticket-facts {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--body);
+  font-size: 0.9rem;
+}
+
+.ticket-facts li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ticket-facts svg {
+  color: var(--muted);
+}
+
+.seat-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.seat-tag {
+  padding: 1px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-policy {
+  padding: 0 16px 14px;
+  font-size: 0.85rem;
+}
+
+/* perforated tear line with a notch cut on each side */
+.ticket-stub {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border-top: 2px dashed var(--line-strong);
+}
+
+.ticket-stub::before,
+.ticket-stub::after {
+  content: "";
+  position: absolute;
+  top: -12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--notch, var(--bg));
+}
+
+.ticket-stub::before {
+  left: -12px;
+}
+
+.ticket-stub::after {
+  right: -12px;
+}
+
+.ticket-amount {
+  display: grid;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.ticket-amount strong {
+  color: var(--text);
+  font-family: var(--serif);
+  font-size: 1.6rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1.2;
+}
+
+.ticket-action {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.ticket-note,
+.ticket-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.ticket-status {
+  font-size: 0.9rem;
+}
+
+.ticket-status.done {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ticket-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px 16px;
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.ticket.compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-right: 14px;
+  transition: border-color 0.25s var(--ease);
+}
+
+.ticket.compact .ticket-main {
+  min-width: 0;
+  padding: 12px;
+}
+
+.ticket.compact .poster.small {
+  width: 44px;
+}
+
+.ticket.compact h3 {
+  font-size: 1.05rem;
+}
+
+.ticket.compact.selected {
+  border-color: var(--accent);
+}
+
+.ticket-line {
+  font-size: 0.85rem;
+}
+
+.ticket-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.25s var(--ease);
+}
+
+.ticket-open:hover {
+  border-color: var(--muted);
+}
+
+/* the small hall inside a ticket */
+.hall-stage.ticket-hall {
+  padding: 40px 0 8px;
+}
+
+.hall-stage.ticket-hall .hall-camera {
+  margin-inline: 13%;
+}
+
+.hall-stage.ticket-hall .hall-screen {
+  height: 26px;
+}
+
+.hall-stage.ticket-hall .hall-floor {
+  gap: 4px;
+  padding: 12px 8px 14px;
+  border-radius: 14px 14px 20px 20px;
+}
+
+.hall-stage.ticket-hall .hall-screen-label {
+  margin-bottom: 4px;
+  font-size: 0.55rem;
+}
+
+.hall-stage.ticket-hall .hall-row {
+  gap: 3px;
+}
+
+.hall-stage.ticket-hall .hall-row-label {
+  width: 10px;
+  font-size: 0.55rem;
+}
+
+.hall-stage.ticket-hall .seat {
+  max-width: 18px;
+  border-radius: 4px 4px 5px 5px;
+  box-shadow: inset 0 -3px 0 #454545;
+}
+
+.hall-stage.ticket-hall .seat.taken {
+  box-shadow: inset 0 -3px 0 #232323;
+}
+
+.hall-stage.ticket-hall .seat.picked {
+  box-shadow: inset 0 -3px 0 #c9bfa9, 0 0 10px rgba(239, 232, 218, 0.5);
+}
+
+.hall-stage.ticket-hall .seat.aisle {
+  margin-left: 8px;
+}
+
 /* ---------- footer ---------- */
 
 .footer {
@@ -1078,6 +1650,13 @@ nav a[aria-current="page"]::after {
     order: 0;
     width: min(560px, 100%);
     margin-inline: auto;
+  }
+}
+
+@media (max-width: 1023px) {
+  .chat-page {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 16px;
   }
 }
 
@@ -1176,6 +1755,39 @@ nav a[aria-current="page"]::after {
 
   .auth-dialog {
     padding: 24px 20px;
+  }
+
+  .chat {
+    height: calc(100dvh - var(--header-h, 104px) - 28px);
+  }
+
+  .chat-head {
+    padding: 12px 14px;
+  }
+
+  .chat-stream {
+    padding: 18px 12px;
+  }
+
+  .msg-avatar {
+    display: none;
+  }
+
+  .composer {
+    margin: 0 10px 10px;
+  }
+
+  .ticket-stub {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ticket-action {
+    justify-items: stretch;
+  }
+
+  .ticket-note {
+    justify-content: center;
   }
 }
 
