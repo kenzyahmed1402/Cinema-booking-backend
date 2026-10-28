@@ -151,7 +151,11 @@ describe("customers and their own bookings", () => {
 
     const list = await api.get("/bookings").set(alice.auth);
     assert.deepEqual(list.body.data.bookings.map((b) => b._id), [aliceBooking._id]);
-    assert.equal((await api.get(`/bookings/${aliceBooking._id}`).set(alice.auth)).status, 200);
+    const own = await api.get(`/bookings/${aliceBooking._id}`).set(alice.auth);
+    assert.equal(own.status, 200);
+    // With what a booking page shows: the movie, screen and cinema
+    assert.equal(own.body.data.booking.showtime.screen.cinema.name, "Cinema");
+    assert.equal(own.body.data.booking.showtime.movie.title, "Movie");
     assert.equal((await api.get(`/bookings/${bobBooking._id}`).set(alice.auth)).status, 404);
     assert.equal((await api.get("/bookings").set(admin.auth)).body.results, 2);
   });

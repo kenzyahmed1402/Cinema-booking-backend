@@ -26,6 +26,17 @@ const sendPayment = (res, statusCode, payment, booking) =>
     data: { payment, ...(booking && { booking }) },
   });
 
+// GET /payments/config: what the web app needs to show PayPal's button. The
+// client ID is public by design (PayPal's script needs it in every page that
+// shows the button); the secret never leaves the server.
+export const getPaymentConfig = catchAsync(async (req, res) => {
+  const clientId = process.env.PAYPAL_CLIENT_ID;
+  if (!clientId) {
+    throw new AppError("Payments are not configured on this server", 503);
+  }
+  res.json({ status: "success", data: { clientId, currency: PAYPAL_CURRENCY } });
+});
+
 // POST /payments/orders { booking }: starts PayPal checkout for the logged-in
 // customer's own unpaid booking. The amount always comes from the booking.
 // Asking again for the same booking returns the same order.

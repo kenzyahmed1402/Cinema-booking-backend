@@ -98,7 +98,7 @@ export const getBookingById = catchAsync(async (req, res) => {
     ...accessFilter(req.user),
   }).populate({
     path: "showtime",
-    populate: [{ path: "movie" }, { path: "screen" }],
+    populate: [{ path: "movie" }, { path: "screen", populate: { path: "cinema" } }],
   });
 
   if (!booking) {

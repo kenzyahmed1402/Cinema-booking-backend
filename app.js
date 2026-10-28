@@ -25,8 +25,23 @@ const app = express();
 // rate limiting sees the real client IP. 0 when running directly.
 app.set("trust proxy", Number(process.env.TRUST_PROXY) || 0);
 
-// Standard security headers
-app.use(helmet());
+// Standard security headers, opened just enough for PayPal's checkout
+// button: its script, the frames and images it shows, the calls it makes,
+// and the popup window it opens (which has to report back to this page)
+const PAYPAL_SOURCES = ["https://*.paypal.com", "https://*.paypalobjects.com"];
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                scriptSrc: ["'self'", ...PAYPAL_SOURCES],
+                frameSrc: ["'self'", ...PAYPAL_SOURCES],
+                connectSrc: ["'self'", ...PAYPAL_SOURCES],
+                imgSrc: ["'self'", "data:", ...PAYPAL_SOURCES],
+            },
+        },
+        crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    })
+);
 
 // The built web app (npm run build), with helmet's security headers. Served
 // here on every host, Vercel included: the fixed path below lets Vercel's
