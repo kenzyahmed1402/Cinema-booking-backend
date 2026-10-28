@@ -226,7 +226,7 @@ export const Home = () => {
           <div className="listing">
             {byMovie.map(({ movie, showtimes: times }) => (
               <article key={movie._id} id={`movie-${movie._id}`} className="listing-item card glow">
-                <Poster title={movie.title} size="small" />
+                <Poster title={movie.title} genre={movie.genre} size="small" />
                 <div className="listing-body">
                   <h3>{movie.title}</h3>
                   <ul className="meta">
