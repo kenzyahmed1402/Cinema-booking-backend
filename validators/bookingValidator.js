@@ -36,8 +36,11 @@ const bookingCancelSchema = {
 };
 
 // Cancelling a paid booking needs an explicit yes, so it can't happen by accident
+// The refund the customer was shown can come along; a different refund is
+// then refused instead of made
 const paidCancelSchema = {
   confirm: { required: true, type: "boolean", enum: [true] },
+  expectedRefundCents: { type: "number", min: 0 },
 };
 
 export const validateBooking = validateRequest(bookingSchema);

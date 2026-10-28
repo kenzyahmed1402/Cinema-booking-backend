@@ -86,7 +86,7 @@ export const getBookings = catchAsync(async (req, res) => {
     .limit(pagination.limit)
     .populate({
       path: "showtime",
-      populate: [{ path: "movie" }, { path: "screen" }],
+      populate: [{ path: "movie" }, { path: "screen", populate: { path: "cinema" } }],
     });
 
   await sendPage(res, "bookings", query, await Booking.countDocuments(filter), pagination);
@@ -240,10 +240,12 @@ export const getCancellationQuote = catchAsync(async (req, res) => {
   res.json({ status: "success", data: { quote: cancellationQuoteFor(booking, payment) } });
 });
 
-// POST /bookings/:id/cancel { confirm: true }: cancels a paid booking and
-// refunds what the policy allows at this moment (not what an earlier quote
-// said). The seats are freed only after PayPal accepted the refund.
+// POST /bookings/:id/cancel { confirm: true, expectedRefundCents? }: cancels
+// a paid booking and refunds what the policy allows at this moment (not what
+// an earlier quote said). With expectedRefundCents, the refund the customer
+// was shown, a different refund is refused and nothing is cancelled. The
+// seats are freed only after PayPal accepted the refund.
 export const cancelPaidBooking = catchAsync(async (req, res) => {
-  const result = await cancelPaid(req.user, req.params.id);
+  const result = await cancelPaid(req.user, req.params.id, { expectedRefundCents: req.body.expectedRefundCents });
   res.json({ status: "success", data: result });
 });

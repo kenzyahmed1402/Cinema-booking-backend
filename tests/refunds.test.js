@@ -88,6 +88,22 @@ describe("cancelling a paid booking", () => {
     assert.equal(paypal.refunds.length, 1);
   });
 
+  it("refuses when the refund differs from the one the customer was shown", async () => {
+    const { alice, showtime, booking } = await paidBooking({ hoursAhead: 48 });
+
+    const changed = await cancel(alice, booking, { confirm: true, expectedRefundCents: 1000 });
+    assert.equal(changed.status, 409);
+    assert.match(changed.body.message, /\$20\.00 instead of \$10\.00/);
+    assert.equal(paypal.refunds.length, 0);
+    assert.deepEqual(await bookedSeats(showtime), ["A1", "A2"]);
+
+    assert.equal((await cancel(alice, booking, { confirm: true, expectedRefundCents: "2000" })).status, 400);
+
+    const res = await cancel(alice, booking, { confirm: true, expectedRefundCents: 2000 });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.booking.status, "refunded");
+  });
+
   it("refunds half between 2 and 24 hours before, and refuses in the last 2 hours", async () => {
     const half = await paidBooking({ hoursAhead: 5 });
     const res = await cancel(half.alice, half.booking);
