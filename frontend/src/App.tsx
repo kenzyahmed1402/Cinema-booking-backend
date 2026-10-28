@@ -1,31 +1,18 @@
 import { useEffect, useRef, type MouseEvent } from "react";
-import { ArrowLeft, Film, LogIn, LogOut, Sparkles, Ticket, UserRound, type LucideIcon } from "lucide-react";
+import { Film, LogIn, LogOut, Sparkles, Ticket, UserRound, type LucideIcon } from "lucide-react";
 import { useAuth } from "./auth";
 import { go, href, useRoute, type Page } from "./route";
 import { Home } from "./pages/Home";
 import { Chat } from "./pages/Chat";
 import { ShowtimePage } from "./pages/Showtime";
 import { BookingPage } from "./pages/Booking";
+import { BookingsPage } from "./pages/Bookings";
 
 const NAV: { page: Page; label: string; icon: LucideIcon }[] = [
   { page: "home", label: "What's on", icon: Film },
   { page: "chat", label: "Assistant", icon: Sparkles },
   { page: "bookings", label: "My bookings", icon: Ticket },
 ];
-
-// A page that arrives in a later step
-const Placeholder = ({ icon: Icon, title, text }: { icon: LucideIcon; title: string; text: string }) => (
-  <section className="placeholder card">
-    <span className="step-icon" aria-hidden="true">
-      <Icon size={22} />
-    </span>
-    <h1>{title}</h1>
-    <p className="muted">{text}</p>
-    <a className="button secondary" href={href("home")}>
-      <ArrowLeft size={16} aria-hidden="true" /> What's on
-    </a>
-  </section>
-);
 
 export const App = () => {
   const { user, logout, requireUser } = useAuth();
@@ -106,9 +93,7 @@ export const App = () => {
         {route.page === "chat" && <Chat initial={route.query.get("q") ?? undefined} />}
         {route.page === "showtime" && <ShowtimePage key={route.param} id={route.param} />}
         {route.page === "booking" && <BookingPage key={route.param} id={route.param} />}
-        {route.page === "bookings" && user && (
-          <Placeholder icon={Ticket} title="My bookings" text="Bookings, payments and refunds arrive in a later step." />
-        )}
+        {route.page === "bookings" && user && <BookingsPage key={user._id} />}
       </main>
 
       <footer className="footer">

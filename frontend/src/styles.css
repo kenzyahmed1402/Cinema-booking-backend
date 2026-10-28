@@ -2009,6 +2009,172 @@ button.seat:disabled {
   animation: flipIn 0.75s var(--ease-out) both;
 }
 
+/* ---------- my bookings ---------- */
+
+.bookings-page {
+  display: grid;
+  gap: 18px;
+  width: min(820px, 100%);
+  margin: 0 auto;
+  padding-top: 28px;
+}
+
+.bookings-page .section-title {
+  margin-bottom: 0;
+}
+
+.bookings-page > .tabs {
+  justify-self: start;
+}
+
+.booking-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-right: 16px;
+}
+
+.booking-row .ticket-main {
+  flex: 1 1 360px;
+  min-width: 0;
+}
+
+.booking-row h3 {
+  font-size: 1.25rem;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 0 16px 16px;
+}
+
+.status-badge {
+  justify-self: start;
+  padding: 2px 10px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status-badge.ok {
+  color: var(--accent);
+}
+
+.status-badge.warn {
+  color: #e6bf62;
+}
+
+.status-badge.muted {
+  color: var(--muted);
+}
+
+.hold-clock.small {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.button.danger {
+  border-color: var(--danger);
+  background: transparent;
+  color: var(--danger);
+}
+
+.button.danger:hover:not(:disabled) {
+  background: rgba(241, 167, 160, 0.1);
+}
+
+.booking-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  color: var(--accent);
+  font-size: 0.95rem;
+}
+
+.bookings-empty {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 36px 20px;
+  text-align: center;
+}
+
+.bookings-empty h2 {
+  font-size: 1.4rem;
+}
+
+.confirm-dialog .refund-lines {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.refund-lines div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.refund-lines dt {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.refund-lines dd {
+  margin: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.refund-total dd {
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.confirm-dialog .hint {
+  text-align: left;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* in the dialog: the main action on top, both full width */
+.confirm-dialog .dialog-actions {
+  flex-direction: column-reverse;
+  align-items: stretch;
+}
+
+.confirm-dialog .dialog-actions .ticket-status {
+  justify-content: center;
+}
+
+.bookings-empty .dialog-actions {
+  justify-content: center;
+  margin-top: 0;
+}
+
 /* ---------- footer ---------- */
 
 .footer {
@@ -2178,6 +2344,11 @@ button.seat:disabled {
   .final-stub {
     flex-direction: row;
     align-items: center;
+  }
+
+  .row-actions {
+    justify-content: flex-start;
+    width: 100%;
   }
 
   .qr {
