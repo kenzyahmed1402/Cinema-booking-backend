@@ -49,6 +49,9 @@ describe("searching showtimes", () => {
     assert.equal(first.movie.title, "Orbit of Ashes");
     assert.equal(first.availableSeats, 50);
 
+    const one = await api.get(`/showTimes/${c.tonight._id}`);
+    assert.equal(one.body.data.showtime.screen.cinema.name, "CineMate Downtown");
+
     assert.equal(ids(await api.get(`/showTimes?cinema=${c.downtown._id}`)).length, 3);
     const window = await api.get(`/showTimes?from=${inHours(4).toISOString()}&to=${inHours(6).toISOString()}`);
     assert.deepEqual(ids(window).sort(), [String(c.tonight._id), String(c.riverTonight._id)].sort());

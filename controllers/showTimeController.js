@@ -80,10 +80,11 @@ export const getShowtimes = catchAsync(async (req, res) => {
   await sendPage(res, "showtimes", findShowtimes(filter, pagination), await Showtime.countDocuments(filter), pagination);
 });
 
+// One showtime with its movie, screen and the screen's cinema
 export const getShowtimeById = catchAsync(async (req, res) => {
   const showtime = await Showtime.findById(req.params.id)
     .populate("movie")
-    .populate("screen");
+    .populate({ path: "screen", populate: { path: "cinema" } });
 
   if (!showtime) {
     throw new AppError("Showtime not found", 404);
