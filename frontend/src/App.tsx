@@ -1,9 +1,10 @@
 import { useEffect, useRef, type MouseEvent } from "react";
-import { Armchair, ArrowLeft, Film, LogIn, LogOut, Sparkles, Ticket, UserRound, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Film, LogIn, LogOut, Sparkles, Ticket, UserRound, type LucideIcon } from "lucide-react";
 import { useAuth } from "./auth";
 import { go, href, useRoute, type Page } from "./route";
 import { Home } from "./pages/Home";
 import { Chat } from "./pages/Chat";
+import { ShowtimePage } from "./pages/Showtime";
 
 const NAV: { page: Page; label: string; icon: LucideIcon }[] = [
   { page: "home", label: "What's on", icon: Film },
@@ -102,9 +103,7 @@ export const App = () => {
       <main id="main" className="wrap" ref={main} tabIndex={-1}>
         {route.page === "home" && <Home />}
         {route.page === "chat" && <Chat initial={route.query.get("q") ?? undefined} />}
-        {route.page === "showtime" && (
-          <Placeholder icon={Armchair} title="Choose your seats" text="The 3D seat picker arrives in a later step." />
-        )}
+        {route.page === "showtime" && <ShowtimePage key={route.param} id={route.param} />}
         {route.page === "bookings" && user && (
           <Placeholder icon={Ticket} title="My bookings" text="Bookings, payments and refunds arrive in a later step." />
         )}

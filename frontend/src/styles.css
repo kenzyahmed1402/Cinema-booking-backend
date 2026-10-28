@@ -638,8 +638,10 @@ nav a[aria-current="page"]::after {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* "backwards": once settled, the camera's own transform applies again,
+     so the seat picker can tilt it */
   .hall-camera {
-    animation: glide 2.8s var(--ease-out) 0.1s both;
+    animation: glide 2.8s var(--ease-out) 0.1s backwards;
   }
 
   .hero .rise {
@@ -1629,6 +1631,205 @@ nav a[aria-current="page"]::after {
   margin-left: 8px;
 }
 
+/* ---------- seat picker ---------- */
+
+.showtime-page {
+  padding-top: 20px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: color 0.25s var(--ease);
+}
+
+.back-link:hover {
+  color: var(--text);
+}
+
+.picker-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  gap: 24px;
+  align-items: start;
+}
+
+.picker-hall {
+  padding: 16px 16px 28px;
+  overflow: hidden;
+}
+
+.picker-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.picker-toolbar .legend {
+  margin-top: 0;
+}
+
+.picker-toolbar .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.hall-stage.picker {
+  padding-top: 84px;
+}
+
+/* the camera moves slowly between the hall view and the top view */
+.hall-stage.picker .hall-camera {
+  margin-inline: 8%;
+  transition: transform 1.6s var(--ease-out);
+}
+
+.hall-stage.picker.top .hall-camera {
+  transform: rotateX(10deg);
+}
+
+.hall-stage.picker .seat {
+  max-width: 36px;
+}
+
+button.seat {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  transition: transform 0.5s var(--ease-out), background-color 0.3s var(--ease);
+}
+
+button.seat:disabled {
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button.seat.free:hover {
+    background: #4a4a4a;
+  }
+}
+
+/* a picked seat rises a little and glows */
+.hall-stage.picker .seat.picked {
+  transform: translate3d(0, -3px, 0) scale(1.12);
+}
+
+.picker-summary {
+  position: sticky;
+  top: calc(var(--header-h, 69px) + 20px);
+  display: grid;
+  gap: 18px;
+  padding: 20px 20px 0;
+  --notch: var(--bg);
+}
+
+.picker-summary .ticket-stub {
+  margin: 0 -20px;
+  padding: 16px 20px;
+}
+
+.picker-summary .ticket-error {
+  margin: -6px 0 18px;
+}
+
+.summary-movie {
+  display: flex;
+  gap: 14px;
+}
+
+.summary-movie h1 {
+  font-size: 1.5rem;
+  margin-bottom: 6px;
+}
+
+.summary-movie .poster.small {
+  width: 64px;
+}
+
+.summary-count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-block: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stepper output {
+  min-width: 2ch;
+  color: var(--text);
+  font-family: var(--serif);
+  font-size: 1.4rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  text-align: center;
+}
+
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.summary-seats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ---------- home filters ---------- */
+
+.filters {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.chip.on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.no-results {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 0;
+}
+
 /* ---------- footer ---------- */
 
 .footer {
@@ -1654,9 +1855,14 @@ nav a[aria-current="page"]::after {
 }
 
 @media (max-width: 1023px) {
-  .chat-page {
+  .chat-page,
+  .picker-layout {
     grid-template-columns: minmax(0, 1fr);
     padding-top: 16px;
+  }
+
+  .picker-summary {
+    position: static;
   }
 }
 
@@ -1788,6 +1994,30 @@ nav a[aria-current="page"]::after {
 
   .ticket-note {
     justify-content: center;
+  }
+
+  .picker-hall {
+    padding: 12px 8px 20px;
+  }
+
+  .hall-stage.picker {
+    padding-top: 56px;
+  }
+
+  .hall-stage.picker .hall-camera {
+    margin-inline: 4%;
+  }
+
+  .hall-stage.picker .hall-row {
+    gap: 3px;
+  }
+
+  .hall-stage.picker .seat.aisle {
+    margin-left: 7px;
+  }
+
+  .hall-stage.picker .hall-row-label {
+    width: 9px;
   }
 }
 

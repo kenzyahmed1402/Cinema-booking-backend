@@ -6,6 +6,7 @@ import {
   Clock,
   CreditCard,
   Film,
+  Filter,
   MapPin,
   MessageCircle,
   Sparkles,
@@ -49,6 +50,8 @@ export const Home = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [day, setDay] = useState<string>("");
+  const [genre, setGenre] = useState("");
+  const [cinema, setCinema] = useState("");
   const [prompt, setPrompt] = useState("");
 
   useEffect(() => {
@@ -64,17 +67,32 @@ export const Home = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  // The genres and cinemas that have showtimes, for the filters
+  const genres = useMemo(() => [...new Set(showtimes.map((s) => s.movie.genre))].sort(), [showtimes]);
+  const cinemas = useMemo(() => {
+    const byId = new Map(showtimes.map((s) => [s.screen.cinema._id, s.screen.cinema.name.replace("CineMate ", "")]));
+    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [showtimes]);
+
+  const filtered = useMemo(
+    () =>
+      showtimes.filter(
+        (s) => (!genre || s.movie.genre === genre) && (!cinema || s.screen.cinema._id === cinema)
+      ),
+    [showtimes, genre, cinema]
+  );
+
   // Showtimes per local day, in order
   const days = useMemo(() => {
     const byDay = new Map<string, Showtime[]>();
-    for (const showtime of showtimes) {
+    for (const showtime of filtered) {
       const key = localDay(new Date(showtime.startTime));
       byDay.set(key, [...(byDay.get(key) ?? []), showtime]);
     }
     return [...byDay.entries()];
-  }, [showtimes]);
+  }, [filtered]);
 
-  const selectedDay = day || days[0]?.[0] || "";
+  const selectedDay = days.some(([key]) => key === day) ? day : days[0]?.[0] || "";
   const dayShowtimes = days.find(([key]) => key === selectedDay)?.[1] ?? [];
 
   // Movies playing soonest first: the ones to recommend
@@ -103,6 +121,8 @@ export const Home = () => {
   const showMovie = (movieId: string) => {
     const first = showtimes.find((showtime) => showtime.movie._id === movieId);
     if (!first) return;
+    setGenre("");
+    setCinema("");
     setDay(localDay(new Date(first.startTime)));
     requestAnimationFrame(() =>
       document.getElementById(`movie-${movieId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })
@@ -203,12 +223,59 @@ export const Home = () => {
         </section>
       )}
 
-      {days.length > 0 && (
+      {showtimes.length > 0 && (
         <section>
           <h2 className="section-title">
             <CalendarDays size={20} aria-hidden="true" /> Showtimes
           </h2>
-          <div className="tabs days" role="tablist" aria-label="Day">
+          <div className="filters">
+            <div className="chip-group" role="group" aria-label="Genre">
+              <Filter size={15} aria-hidden="true" />
+              {["", ...genres].map((value) => (
+                <button
+                  key={value || "all"}
+                  type="button"
+                  className={genre === value ? "chip on" : "chip"}
+                  aria-pressed={genre === value}
+                  onClick={() => setGenre(value)}
+                >
+                  {value || "All genres"}
+                </button>
+              ))}
+            </div>
+            <div className="chip-group" role="group" aria-label="Cinema">
+              <MapPin size={15} aria-hidden="true" />
+              {[["", "All cinemas"], ...cinemas].map(([id, name]) => (
+                <button
+                  key={id || "all"}
+                  type="button"
+                  className={cinema === id ? "chip on" : "chip"}
+                  aria-pressed={cinema === id}
+                  onClick={() => setCinema(id)}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {days.length === 0 && (
+            <div className="no-results">
+              <p className="muted">No showtimes match these filters</p>
+              <button
+                type="button"
+                className="button ghost small"
+                onClick={() => {
+                  setGenre("");
+                  setCinema("");
+                }}
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
+
+          <div className="tabs days" role="tablist" aria-label="Day" hidden={days.length === 0}>
             {days.map(([key]) => (
               <button
                 key={key}
