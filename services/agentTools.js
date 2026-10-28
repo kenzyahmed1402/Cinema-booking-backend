@@ -235,6 +235,7 @@ export const agentTools = {
         type: "cancellation",
         booking,
         movie: doc?.movie?.title,
+        genre: doc?.movie?.genre,
         cinema: doc?.screen?.cinema?.name,
         startTime: found.booking.showtime.startTime,
         localTime: localTime(found.booking.showtime.startTime),

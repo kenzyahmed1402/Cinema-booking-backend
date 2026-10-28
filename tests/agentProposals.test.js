@@ -135,6 +135,7 @@ describe("confirming a cancellation proposal", () => {
 
     const { proposal, card } = await runTool(alice.user, "proposeCancellation", { booking: String(booking._id) });
     assert.equal(card.type, "cancellation");
+    assert.equal(card.genre, "Drama");
     assert.equal(card.refundCents, 2000);
     assert.equal(card.refundPercent, 100);
     assert.equal((await Booking.findById(booking._id)).status, "confirmed");
