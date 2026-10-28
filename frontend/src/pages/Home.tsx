@@ -1,19 +1,48 @@
 import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  ArrowRight,
+  Armchair,
+  CalendarDays,
+  Clock,
+  CreditCard,
+  Film,
+  MapPin,
+  MessageCircle,
+  Sparkles,
+  Ticket,
+} from "lucide-react";
 import { api, errorMessage } from "../api";
 import type { Movie, Showtime } from "../types";
 import { dayLabel, localDay, money, runtime, time } from "../format";
 import { go, href } from "../route";
 import { Poster } from "../components/Poster";
+import { CinemaHall, type SeatState } from "../components/CinemaHall";
 
-const HEADLINE = ["What", "do", "you", "feel", "like", "watching?"];
+const HEADLINE = ["Your", "seat", "is", "waiting."];
 
-const SUGGESTIONS = [
-  "A sci-fi movie tonight for two",
-  "Something funny tomorrow evening",
-  "What's on downtown this weekend?",
+const POINTS = [
+  { icon: MessageCircle, text: "Tell the assistant what you feel like" },
+  { icon: Film, text: "It finds the film and picks seats" },
+  { icon: CreditCard, text: "You confirm and pay with PayPal" },
 ];
 
-// The public home page: ask the assistant, see what's on
+const SUGGESTIONS = ["Sci-fi tonight for two", "Something funny tomorrow", "Downtown this weekend"];
+
+const STEPS = [
+  { icon: MessageCircle, title: "Ask", text: "Mood, day, how many seats" },
+  { icon: Armchair, title: "Pick seats", text: "See the hall, choose your row" },
+  { icon: Ticket, title: "Pay", text: "PayPal, then your ticket" },
+];
+
+// The home hall is a preview: a fixed pattern of taken seats and two
+// picked ones in the middle of row E
+const previewSeat = (row: string, seat: number): SeatState => {
+  if (row === "E" && (seat === 6 || seat === 7)) return "picked";
+  const r = row.charCodeAt(0) - 65;
+  return (r * 5 + seat * 7) % 9 < 3 ? "taken" : "free";
+};
+
+// The public home page: the hall, the assistant, what's on
 export const Home = () => {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [showtimes, setShowtimes] = useState<Showtime[]>([]);
@@ -88,37 +117,64 @@ export const Home = () => {
   return (
     <div className="home">
       <section className="hero">
-        <p className="eyebrow rise">AI cinema concierge</p>
-        {/* Each word rises in turn; the words stay plain text for screen readers */}
-        <h1>
-          {HEADLINE.map((word, i) => (
-            <Fragment key={word}>
-              {i > 0 && " "}
-              <span className={i === HEADLINE.length - 1 ? "w accent" : "w"}>
-                <span>{word}</span>
-              </span>
-            </Fragment>
-          ))}
-        </h1>
-        <p className="lead rise">Tell CineMate the mood, the day and how many seats. It finds the showtime, picks seats and prepares the booking. You confirm and pay with PayPal.</p>
-        <form className="prompt rise" onSubmit={ask}>
-          <input
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="e.g. A thriller tomorrow night downtown, two seats"
-            aria-label="Ask the assistant"
-            maxLength={1000}
-          />
-          <button type="submit" className="button primary" disabled={!prompt.trim()}>
-            Ask
-          </button>
-        </form>
-        <div className="chips rise">
-          {SUGGESTIONS.map((text) => (
-            <button key={text} type="button" className="chip" onClick={() => ask(undefined, text)}>
-              {text}
+        <div className="hero-visual">
+          <CinemaHall rows={8} seatsPerRow={12} stateOf={previewSeat} label="Preview of a cinema hall with two seats picked in row E" />
+          <ul className="legend" aria-label="Seat colours">
+            <li>
+              <span className="seat free" aria-hidden="true" /> Free
+            </li>
+            <li>
+              <span className="seat taken" aria-hidden="true" /> Taken
+            </li>
+            <li>
+              <span className="seat picked" aria-hidden="true" /> Yours
+            </li>
+          </ul>
+        </div>
+
+        <div className="hero-text">
+          <p className="eyebrow rise">
+            <Sparkles size={14} aria-hidden="true" /> AI cinema concierge
+          </p>
+          {/* Each word rises in turn; the words stay plain text for screen readers */}
+          <h1>
+            {HEADLINE.map((word, i) => (
+              <Fragment key={word}>
+                {i > 0 && " "}
+                <span className="w">
+                  <span>{word}</span>
+                </span>
+              </Fragment>
+            ))}
+          </h1>
+          <ul className="points rise">
+            {POINTS.map(({ icon: Icon, text }) => (
+              <li key={text}>
+                <Icon size={18} aria-hidden="true" />
+                {text}
+              </li>
+            ))}
+          </ul>
+          <form className="prompt rise" onSubmit={ask}>
+            <Sparkles className="prompt-icon" size={18} aria-hidden="true" />
+            <input
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="A thriller tomorrow night, two seats"
+              aria-label="Ask the assistant"
+              maxLength={1000}
+            />
+            <button type="submit" className="button primary" disabled={!prompt.trim()}>
+              Ask <ArrowRight size={16} aria-hidden="true" />
             </button>
-          ))}
+          </form>
+          <div className="chips rise">
+            {SUGGESTIONS.map((text) => (
+              <button key={text} type="button" className="chip" onClick={() => ask(undefined, text)}>
+                {text}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -131,13 +187,15 @@ export const Home = () => {
 
       {recommended.length > 0 && (
         <section>
-          <h2 className="section-title">Recommended now</h2>
+          <h2 className="section-title">
+            <Film size={20} aria-hidden="true" /> Now showing
+          </h2>
           <div className="poster-row">
             {recommended.map((movie) => (
               <button key={movie._id} type="button" className="movie-tile glow" onClick={() => showMovie(movie._id)}>
                 <Poster title={movie.title} genre={movie.genre} />
                 <span className="movie-meta">
-                  {movie.genre} · {runtime(movie.duration)}
+                  <Clock size={14} aria-hidden="true" /> {runtime(movie.duration)}
                 </span>
               </button>
             ))}
@@ -147,7 +205,9 @@ export const Home = () => {
 
       {days.length > 0 && (
         <section>
-          <h2 className="section-title">Showtimes</h2>
+          <h2 className="section-title">
+            <CalendarDays size={20} aria-hidden="true" /> Showtimes
+          </h2>
           <div className="tabs days" role="tablist" aria-label="Day">
             {days.map(([key]) => (
               <button
@@ -169,17 +229,26 @@ export const Home = () => {
                 <Poster title={movie.title} size="small" />
                 <div className="listing-body">
                   <h3>{movie.title}</h3>
-                  <p className="muted">
-                    {movie.genre} · {runtime(movie.duration)}
-                  </p>
+                  <ul className="meta">
+                    <li>
+                      <Film size={14} aria-hidden="true" /> {movie.genre}
+                    </li>
+                    <li>
+                      <Clock size={14} aria-hidden="true" /> {runtime(movie.duration)}
+                    </li>
+                  </ul>
                   {movie.description && <p className="description">{movie.description}</p>}
                   <div className="times">
                     {times.map((showtime) => (
                       <a key={showtime._id} className="time-chip" href={href("showtime", showtime._id)}>
                         <strong>{time(showtime.startTime)}</strong>
-                        <span>{showtime.screen.cinema.name.replace("CineMate ", "")}</span>
                         <span>
-                          {money(showtime.price)} · {showtime.availableSeats} left
+                          <MapPin size={12} aria-hidden="true" />
+                          {showtime.screen.cinema.name.replace("CineMate ", "")}
+                        </span>
+                        <span>
+                          <Armchair size={12} aria-hidden="true" />
+                          {showtime.availableSeats} left · {money(showtime.price)}
                         </span>
                       </a>
                     ))}
@@ -190,6 +259,24 @@ export const Home = () => {
           </div>
         </section>
       )}
+
+      <section aria-labelledby="steps-title">
+        <h2 id="steps-title" className="section-title">
+          <Ticket size={20} aria-hidden="true" /> How it works
+        </h2>
+        <ol className="steps">
+          {STEPS.map(({ icon: Icon, title, text }, i) => (
+            <li key={title} className="card glow">
+              <span className="step-icon" aria-hidden="true">
+                <Icon size={22} />
+              </span>
+              <span className="step-number">{i + 1}</span>
+              <h3>{title}</h3>
+              <p className="muted">{text}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
     </div>
   );
 };

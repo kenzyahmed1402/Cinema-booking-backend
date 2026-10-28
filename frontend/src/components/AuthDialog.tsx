@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ArrowRight, X } from "lucide-react";
 import { errorMessage } from "../api";
 import { useAuth } from "../auth";
 
@@ -41,15 +42,15 @@ export const AuthDialog = ({ reason, onClose }: { reason: string; onClose: () =>
   return (
     <dialog ref={dialog} className="auth-dialog" onCancel={onClose} aria-labelledby="auth-title">
       <button type="button" className="icon-button close" onClick={onClose} aria-label="Close">
-        ×
+        <X size={18} aria-hidden="true" />
       </button>
       <h2 id="auth-title">{reason}</h2>
-      <p className="muted">Browsing and chatting are free. Booking, paying and cancelling need an account.</p>
+      <p className="muted">Booking, paying and cancelling need an account.</p>
 
       <button type="button" className="button primary wide" disabled={busy} onClick={() => run(continueAsGuest)}>
-        Continue as guest
+        Continue as guest <ArrowRight size={16} aria-hidden="true" />
       </button>
-      <p className="hint">No email needed. You can save it as a full account later.</p>
+      <p className="hint">No email needed · save it as an account later</p>
 
       <div className="divider">
         <span>or</span>

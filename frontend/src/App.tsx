@@ -1,22 +1,25 @@
 import { useEffect, useRef, type MouseEvent } from "react";
+import { Armchair, ArrowLeft, Film, LogIn, LogOut, Sparkles, Ticket, UserRound, type LucideIcon } from "lucide-react";
 import { useAuth } from "./auth";
 import { go, href, useRoute, type Page } from "./route";
 import { Home } from "./pages/Home";
-import { ThemeToggle } from "./components/ThemeToggle";
 
-const NAV: { page: Page; label: string }[] = [
-  { page: "home", label: "What's on" },
-  { page: "chat", label: "Assistant" },
-  { page: "bookings", label: "My bookings" },
+const NAV: { page: Page; label: string; icon: LucideIcon }[] = [
+  { page: "home", label: "What's on", icon: Film },
+  { page: "chat", label: "Assistant", icon: Sparkles },
+  { page: "bookings", label: "My bookings", icon: Ticket },
 ];
 
 // A page that arrives in a later step
-const Placeholder = ({ title, text }: { title: string; text: string }) => (
+const Placeholder = ({ icon: Icon, title, text }: { icon: LucideIcon; title: string; text: string }) => (
   <section className="placeholder card">
+    <span className="step-icon" aria-hidden="true">
+      <Icon size={22} />
+    </span>
     <h1>{title}</h1>
     <p className="muted">{text}</p>
     <a className="button secondary" href={href("home")}>
-      Back to what's on
+      <ArrowLeft size={16} aria-hidden="true" /> What's on
     </a>
   </section>
 );
@@ -53,27 +56,28 @@ export const App = () => {
             CineMate
           </a>
           <nav aria-label="Main">
-            {NAV.map((item) => (
-              <a key={item.page} href={href(item.page)} aria-current={route.page === item.page ? "page" : undefined}>
-                {item.label}
+            {NAV.map(({ page, label, icon: Icon }) => (
+              <a key={page} href={href(page)} aria-current={route.page === page ? "page" : undefined}>
+                <Icon size={16} aria-hidden="true" />
+                {label}
               </a>
             ))}
           </nav>
           <div className="account">
-            <ThemeToggle />
             {user === undefined ? null : user ? (
               <>
                 <span className="user-name">
+                  <UserRound size={16} aria-hidden="true" />
                   {user.isGuest ? "Guest" : user.name}
                   {user.isGuest && <span className="badge">temporary</span>}
                 </span>
                 <button type="button" className="button ghost small" onClick={() => logout()}>
-                  Log out
+                  <LogOut size={15} aria-hidden="true" /> Log out
                 </button>
               </>
             ) : (
               <button type="button" className="button ghost small" onClick={() => requireUser("Welcome to CineMate")}>
-                Log in
+                <LogIn size={15} aria-hidden="true" /> Log in
               </button>
             )}
           </div>
@@ -83,18 +87,18 @@ export const App = () => {
       <main id="main" className="wrap" ref={main} tabIndex={-1}>
         {route.page === "home" && <Home />}
         {route.page === "chat" && (
-          <Placeholder title="Assistant" text="The chat with booking cards arrives in the next step." />
+          <Placeholder icon={Sparkles} title="Assistant" text="The chat with booking cards arrives next." />
         )}
         {route.page === "showtime" && (
-          <Placeholder title="Choose your seats" text="The seat picker arrives in a later step." />
+          <Placeholder icon={Armchair} title="Choose your seats" text="The 3D seat picker arrives in a later step." />
         )}
         {route.page === "bookings" && user && (
-          <Placeholder title="My bookings" text="Your bookings, payments and cancellations arrive in a later step." />
+          <Placeholder icon={Ticket} title="My bookings" text="Bookings, payments and refunds arrive in a later step." />
         )}
       </main>
 
       <footer className="footer">
-        <p className="wrap muted">Fictional movies and cinemas. Payments use the PayPal Sandbox: no real money is charged.</p>
+        <p className="wrap muted">Fictional movies and cinemas · PayPal Sandbox, no real money is charged</p>
       </footer>
     </div>
   );
