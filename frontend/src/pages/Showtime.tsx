@@ -19,7 +19,7 @@ import { api, ApiError, errorMessage } from "../api";
 import { useAuth } from "../auth";
 import { dayLabel, localDay, money, runtime, time } from "../format";
 import { clock, useSecondsLeft } from "../hooks";
-import { href } from "../route";
+import { go, href } from "../route";
 import { bestSeats } from "../seats";
 import type { Booking, SeatMap, Showtime } from "../types";
 import { CinemaHall } from "../components/CinemaHall";
@@ -97,8 +97,7 @@ export const ShowtimePage = ({ id }: { id?: string }) => {
     try {
       const { booking } = await api<{ booking: Booking }>("POST", "/bookings", { showtime: id, seats: picked });
       setHeld(booking);
-      setView("angled");
-      setMap(await loadSeats());
+      go("booking", booking._id);
     } catch (err) {
       setHoldError(errorMessage(err));
       // Someone may have taken a seat meanwhile: show the hall as it is now

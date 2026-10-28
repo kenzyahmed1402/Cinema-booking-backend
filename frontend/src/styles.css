@@ -1830,6 +1830,185 @@ button.seat:disabled {
   padding: 24px 0;
 }
 
+/* ---------- checkout and ticket ---------- */
+
+.booking-page {
+  display: grid;
+  gap: 18px;
+  width: min(620px, 100%);
+  margin: 0 auto;
+  padding-top: 20px;
+  --notch: var(--bg);
+}
+
+.booking-page .back-link {
+  margin-bottom: 0;
+}
+
+.ticket.checkout h1,
+.ticket.final h2 {
+  font-size: 1.6rem;
+}
+
+.ticket.full .poster.small {
+  width: 84px;
+}
+
+.hold-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--body);
+  font-size: 0.95rem;
+}
+
+.hold-clock strong {
+  color: var(--text);
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.hold-clock.urgent,
+.hold-clock.urgent strong {
+  color: var(--danger);
+}
+
+.checkout-pay {
+  display: grid;
+  gap: 12px;
+  padding: 4px 16px 20px;
+}
+
+.paypal-area {
+  display: grid;
+  gap: 10px;
+}
+
+/* PayPal draws its button in a frame; this keeps it a sensible width */
+.paypal-buttons {
+  width: min(420px, 100%);
+  margin: 0 auto;
+}
+
+.checkout-note {
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.checkout-ended {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.booking-done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.final-stub {
+  justify-content: flex-start;
+  gap: 22px;
+}
+
+.qr {
+  display: block;
+  width: 148px;
+  height: 148px;
+  border-radius: 10px;
+}
+
+.ticket-ref {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.ticket-ref dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ticket-ref dd {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.ticket-ref dd.ticket-status {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 0.9rem;
+}
+
+.ticket-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.save-booking {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.save-head,
+.save-booking.done {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.save-booking svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.save-booking h3 {
+  font-size: 1.2rem;
+}
+
+/* the paid card turns over to show the ticket: transform only */
+@keyframes flipOut {
+  from {
+    transform: perspective(1400px) rotateY(0);
+  }
+  to {
+    transform: perspective(1400px) rotateY(90deg);
+  }
+}
+
+@keyframes flipIn {
+  from {
+    transform: perspective(1400px) rotateY(-90deg);
+  }
+  to {
+    transform: perspective(1400px) rotateY(0);
+  }
+}
+
+.ticket-flip.out {
+  animation: flipOut 0.55s cubic-bezier(0.55, 0, 1, 0.45) 0.35s forwards;
+}
+
+.ticket-flip.in {
+  animation: flipIn 0.75s var(--ease-out) both;
+}
+
 /* ---------- footer ---------- */
 
 .footer {
@@ -1996,6 +2175,16 @@ button.seat:disabled {
     justify-content: center;
   }
 
+  .final-stub {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .qr {
+    width: 128px;
+    height: 128px;
+  }
+
   .picker-hall {
     padding: 12px 8px 20px;
   }
@@ -2050,5 +2239,50 @@ button.seat:disabled {
   body {
     background: #ffffff;
     color: #000000;
+  }
+
+  /* On the booking page only the ticket prints */
+  body:has(.printable) * {
+    visibility: hidden;
+  }
+
+  body:has(.printable) .printable,
+  body:has(.printable) .printable * {
+    visibility: visible;
+  }
+
+  .printable {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: 16cm;
+    --notch: #ffffff;
+    background: #ffffff;
+    border-color: #999999;
+    color: #000000;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .printable h2,
+  .printable .ticket-facts,
+  .printable .ticket-ref dd,
+  .printable .ticket-status.done {
+    color: #000000;
+  }
+
+  .printable .ticket-kind,
+  .printable .seat-tag {
+    color: #000000;
+    border-color: #000000;
+  }
+
+  .printable .ticket-stub {
+    border-top-color: #999999;
+  }
+
+  .ticket-flip {
+    animation: none !important;
   }
 }

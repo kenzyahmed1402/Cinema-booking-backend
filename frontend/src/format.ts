@@ -24,3 +24,16 @@ export const dayLabel = (day: string, now = new Date()) => {
 };
 
 export const runtime = (minutes: number) => `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+
+// "Wed 28 Oct 2026, 21:00" in the cinemas' time zone, for tickets
+export const longDate = (iso: string) =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: CINEMA_TIME_ZONE,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(iso));

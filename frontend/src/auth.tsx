@@ -9,6 +9,8 @@ type Auth = {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   continueAsGuest: () => Promise<void>;
+  // Turns the guest account into a normal one, keeping its bookings
+  upgrade: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   // For actions that need an account (book, confirm, pay, cancel): resolves
   // with the user, asking a visitor to log in, register or continue as a
@@ -62,6 +64,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loggedIn((await api<{ user: User }>("POST", "/auth/guest")).user);
   }, [loggedIn]);
 
+  const upgrade = useCallback(async (name: string, email: string, password: string) => {
+    setUser((await api<{ user: User }>("POST", "/auth/upgrade", { name, email, password })).user);
+  }, []);
+
   const logout = useCallback(async () => {
     await api("POST", "/auth/logout");
     setUser(null);
@@ -80,7 +86,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 
   return (
-    <AuthContext.Provider value={{ user, login, register, continueAsGuest, logout, requireUser }}>
+    <AuthContext.Provider value={{ user, login, register, continueAsGuest, upgrade, logout, requireUser }}>
       {children}
       {dialogReason !== null && <AuthDialog reason={dialogReason} onClose={() => finish(null)} />}
     </AuthContext.Provider>

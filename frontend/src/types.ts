@@ -112,3 +112,28 @@ export type Booking = {
   totalPrice: number;
   holdExpiresAt?: string;
 };
+
+// GET /bookings/:id: a booking with its showtime, movie, screen and cinema
+export type BookingDetail = {
+  _id: string;
+  seats: string[];
+  totalPrice: number;
+  status: "pending" | "confirmed" | "cancelled" | "expired" | "refunded" | "needs_review";
+  holdExpiresAt?: string;
+  showtime: {
+    _id: string;
+    startTime: string;
+    price: number;
+    movie: Movie;
+    screen: { screenNumber: number; cinema?: Cinema };
+  };
+};
+
+// A PayPal payment as the API records it
+export type Payment = {
+  _id: string;
+  paypalOrderId: string;
+  status: string;
+  amountCents: number;
+  currency: string;
+};

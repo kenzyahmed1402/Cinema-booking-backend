@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { money } from "../format";
+import { href } from "../route";
 import { clock, useSecondsLeft } from "../hooks";
 import type { Booking, ProposalCard, SeatMap } from "../types";
 import { CinemaHall } from "./CinemaHall";
@@ -23,6 +24,8 @@ import { Poster } from "./Poster";
 export type CardState = {
   status: "loading" | "open" | "confirmed" | "expired";
   booking?: Booking;
+  // The booking a confirmed card made or cancelled
+  bookingId?: string;
   busy?: boolean;
   error?: string;
 };
@@ -120,15 +123,20 @@ export const ProposalTicket = ({ card, state, onConfirm, variant, selected, onSe
       );
     }
     if (status === "confirmed") {
+      const bookingId = state.booking?._id ?? state.bookingId;
+      const held = Boolean(state.booking?.holdExpiresAt && holdLeft > 0);
       return (
-        <p className="ticket-status done">
-          <Check size={16} aria-hidden="true" />
-          {booking
-            ? state.booking?.holdExpiresAt && holdLeft > 0
-              ? `Seats held · pay within ${clock(holdLeft)}`
-              : "Seats held · see My bookings"
-            : "Cancelled · refund on its way"}
-        </p>
+        <>
+          <p className="ticket-status done">
+            <Check size={16} aria-hidden="true" />
+            {booking ? (held ? `Seats held · ${clock(holdLeft)} left` : "Booked") : "Cancelled · refund on its way"}
+          </p>
+          {booking && bookingId && (
+            <a className="button primary" href={href("booking", bookingId)}>
+              {held ? "Pay now" : "View booking"} <ArrowRight size={16} aria-hidden="true" />
+            </a>
+          )}
+        </>
       );
     }
     return (

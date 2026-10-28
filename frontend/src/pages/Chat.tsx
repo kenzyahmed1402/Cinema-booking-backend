@@ -52,7 +52,7 @@ export const Chat = ({ initial }: { initial?: string }) => {
       setCardStates((all) => ({ ...all, [card.proposal]: { status: "loading" } }));
       api<{ proposal: Proposal }>("GET", `/agent/proposals/${card.proposal}`)
         .then(({ proposal }) =>
-          setCardStates((all) => ({ ...all, [card.proposal]: { status: proposal.status === "confirmed" ? "confirmed" : "open" } }))
+          setCardStates((all) => ({ ...all, [card.proposal]: { status: proposal.status === "confirmed" ? "confirmed" : "open", bookingId: proposal.result } }))
         )
         .catch(() => setCardStates((all) => ({ ...all, [card.proposal]: { status: "expired" } })));
     }
@@ -67,7 +67,7 @@ export const Chat = ({ initial }: { initial?: string }) => {
     updateCard(card.proposal, { busy: true, error: "" });
     try {
       const { booking } = await api<{ proposal: Proposal; booking: Booking }>("POST", `/agent/proposals/${card.proposal}/confirm`);
-      updateCard(card.proposal, { status: "confirmed", booking, busy: false });
+      updateCard(card.proposal, { status: "confirmed", booking, bookingId: booking._id, busy: false });
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) updateCard(card.proposal, { status: "expired", busy: false });
       else updateCard(card.proposal, { error: errorMessage(err), busy: false });

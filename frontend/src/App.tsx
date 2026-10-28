@@ -5,6 +5,7 @@ import { go, href, useRoute, type Page } from "./route";
 import { Home } from "./pages/Home";
 import { Chat } from "./pages/Chat";
 import { ShowtimePage } from "./pages/Showtime";
+import { BookingPage } from "./pages/Booking";
 
 const NAV: { page: Page; label: string; icon: LucideIcon }[] = [
   { page: "home", label: "What's on", icon: Film },
@@ -104,6 +105,7 @@ export const App = () => {
         {route.page === "home" && <Home />}
         {route.page === "chat" && <Chat initial={route.query.get("q") ?? undefined} />}
         {route.page === "showtime" && <ShowtimePage key={route.param} id={route.param} />}
+        {route.page === "booking" && <BookingPage key={route.param} id={route.param} />}
         {route.page === "bookings" && user && (
           <Placeholder icon={Ticket} title="My bookings" text="Bookings, payments and refunds arrive in a later step." />
         )}
