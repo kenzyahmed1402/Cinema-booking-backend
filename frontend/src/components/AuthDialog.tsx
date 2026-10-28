@@ -39,7 +39,7 @@ export const AuthDialog = ({ reason, onClose }: { reason: string; onClose: () =>
   };
 
   return (
-    <dialog ref={dialog} className="auth-dialog glass" onCancel={onClose} aria-labelledby="auth-title">
+    <dialog ref={dialog} className="auth-dialog" onCancel={onClose} aria-labelledby="auth-title">
       <button type="button" className="icon-button close" onClick={onClose} aria-label="Close">
         ×
       </button>

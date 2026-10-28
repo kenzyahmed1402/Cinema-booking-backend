@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, errorMessage } from "../api";
 import type { Movie, Showtime } from "../types";
 import { dayLabel, localDay, money, runtime, time } from "../format";
 import { go, href } from "../route";
 import { Poster } from "../components/Poster";
+
+const HEADLINE = ["What", "do", "you", "feel", "like", "watching?"];
 
 const SUGGESTIONS = [
   "A sci-fi movie tonight for two",
@@ -84,14 +86,22 @@ export const Home = () => {
   };
 
   return (
-    <main className="home">
+    <div className="home">
       <section className="hero">
-        <p className="eyebrow">AI cinema concierge</p>
+        <p className="eyebrow rise">AI cinema concierge</p>
+        {/* Each word rises in turn; the words stay plain text for screen readers */}
         <h1>
-          What do you feel like <span className="gradient-text">watching?</span>
+          {HEADLINE.map((word, i) => (
+            <Fragment key={word}>
+              {i > 0 && " "}
+              <span className={i === HEADLINE.length - 1 ? "w accent" : "w"}>
+                <span>{word}</span>
+              </span>
+            </Fragment>
+          ))}
         </h1>
-        <p className="lead">Tell CineMate the mood, the day and how many seats. It finds the showtime, picks seats and prepares the booking. You confirm and pay with PayPal.</p>
-        <form className="prompt glass" onSubmit={ask}>
+        <p className="lead rise">Tell CineMate the mood, the day and how many seats. It finds the showtime, picks seats and prepares the booking. You confirm and pay with PayPal.</p>
+        <form className="prompt rise" onSubmit={ask}>
           <input
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -103,7 +113,7 @@ export const Home = () => {
             Ask
           </button>
         </form>
-        <div className="chips">
+        <div className="chips rise">
           {SUGGESTIONS.map((text) => (
             <button key={text} type="button" className="chip" onClick={() => ask(undefined, text)}>
               {text}
@@ -124,7 +134,7 @@ export const Home = () => {
           <h2 className="section-title">Recommended now</h2>
           <div className="poster-row">
             {recommended.map((movie) => (
-              <button key={movie._id} type="button" className="movie-tile" onClick={() => showMovie(movie._id)}>
+              <button key={movie._id} type="button" className="movie-tile glow" onClick={() => showMovie(movie._id)}>
                 <Poster title={movie.title} genre={movie.genre} />
                 <span className="movie-meta">
                   {movie.genre} · {runtime(movie.duration)}
@@ -155,7 +165,7 @@ export const Home = () => {
 
           <div className="listing">
             {byMovie.map(({ movie, showtimes: times }) => (
-              <article key={movie._id} id={`movie-${movie._id}`} className="listing-item glass">
+              <article key={movie._id} id={`movie-${movie._id}`} className="listing-item card glow">
                 <Poster title={movie.title} size="small" />
                 <div className="listing-body">
                   <h3>{movie.title}</h3>
@@ -180,6 +190,6 @@ export const Home = () => {
           </div>
         </section>
       )}
-    </main>
+    </div>
   );
 };

@@ -1,20 +1,25 @@
 import type { CSSProperties } from "react";
 
 // The movies are fictional and have no artwork, so each gets a generated
-// poster: a glowing gradient whose colours come from its title
+// poster: soft light over a dark base, its colours taken from the title.
+// Posters are the only colourful part of the calm page.
 const hash = (text: string) => [...text].reduce((value, char) => (value * 31 + char.charCodeAt(0)) >>> 0, 7);
+
+// Clear, cinematic hues; yellow-greens are left out because they turn muddy
+// on a dark base
+const HUES = [205, 225, 250, 270, 290, 315, 335, 355, 15, 30, 170, 188];
 
 export const posterStyle = (title: string): CSSProperties => {
   const seed = hash(title);
-  // Hues in the violet / indigo / blue / cyan range of the theme
-  const hueA = 190 + (seed % 90);
-  const hueB = 190 + ((seed >>> 8) % 90);
+  const hueA = HUES[seed % HUES.length];
+  // a close neighbour, so the two lights blend instead of clashing
+  const hueB = (hueA + 18 + ((seed >>> 9) % 24)) % 360;
   const x = 20 + ((seed >>> 16) % 60);
   return {
     background: [
-      `radial-gradient(circle at ${x}% 25%, hsl(${hueA} 90% 65% / 0.85), transparent 55%)`,
-      `radial-gradient(circle at ${100 - x}% 85%, hsl(${hueB} 85% 55% / 0.75), transparent 60%)`,
-      `linear-gradient(160deg, hsl(${hueB} 60% 18%), hsl(${hueA} 55% 8%))`,
+      `radial-gradient(circle at ${x}% 22%, hsl(${hueA} 70% 58% / 0.9), transparent 58%)`,
+      `radial-gradient(circle at ${100 - x}% 78%, hsl(${hueB} 65% 45% / 0.8), transparent 62%)`,
+      `linear-gradient(170deg, hsl(${hueB} 35% 16%), hsl(${hueA} 30% 7%))`,
     ].join(", "),
   };
 };
