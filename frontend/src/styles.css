@@ -166,23 +166,8 @@ main:focus {
   text-decoration: none;
 }
 
-.logo-mark {
-  position: relative;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  background: var(--accent);
-}
-
-/* a "play" notch cut into the mark */
-.logo-mark::after {
-  content: "";
-  position: absolute;
-  left: 9px;
-  top: 7px;
-  border-style: solid;
-  border-width: 5px 0 5px 8px;
-  border-color: transparent transparent transparent var(--bg);
+.brand .logo {
+  flex: none;
 }
 
 nav {

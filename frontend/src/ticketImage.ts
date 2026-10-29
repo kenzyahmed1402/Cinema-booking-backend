@@ -1,6 +1,7 @@
 import { longDate, money } from "./format";
 import type { BookingDetail } from "./types";
 import { qrPath } from "./components/QrCode";
+import { drawLogo } from "./logo";
 import { ticketLink, ticketReference } from "./components/TicketCard";
 
 // The ticket as a PNG picture, drawn in the browser (nothing is uploaded).
@@ -66,7 +67,8 @@ const draw = (booking: BookingDetail, poster: HTMLImageElement | null) => {
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#efe8da";
   ctx.font = `600 34px ${SERIF}`;
-  ctx.fillText("Seatora", 90, 120);
+  drawLogo(ctx, 88, 82, 46, "#efe8da");
+  ctx.fillText("Seatora", 144, 120);
   ctx.font = `600 22px ${SANS}`;
   ctx.textAlign = "right";
   ctx.fillText(`ADMIT ${booking.seats.length}`, WIDTH - 90, 118);

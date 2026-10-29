@@ -7,6 +7,7 @@ import { Chat } from "./pages/Chat";
 import { ShowtimePage } from "./pages/Showtime";
 import { BookingPage } from "./pages/Booking";
 import { BookingsPage } from "./pages/Bookings";
+import { Logo } from "./components/Logo";
 
 const NAV: { page: Page; label: string; icon: LucideIcon }[] = [
   { page: "home", label: "What's on", icon: Film },
@@ -56,7 +57,7 @@ export const App = () => {
       <header className="topbar" ref={header}>
         <div className="wrap topbar-inner">
           <a className="brand" href={href("home")}>
-            <span className="logo-mark" aria-hidden="true" />
+            <Logo />
             Seatora
           </a>
           <nav aria-label="Main">
