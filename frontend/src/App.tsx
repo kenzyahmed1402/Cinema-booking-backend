@@ -57,7 +57,7 @@ export const App = () => {
         <div className="wrap topbar-inner">
           <a className="brand" href={href("home")}>
             <span className="logo-mark" aria-hidden="true" />
-            CineMate
+            Seatora
           </a>
           <nav aria-label="Main">
             {NAV.map(({ page, label, icon: Icon }) => (
@@ -80,7 +80,7 @@ export const App = () => {
                 </button>
               </>
             ) : (
-              <button type="button" className="button ghost small" onClick={() => requireUser("Welcome to CineMate")}>
+              <button type="button" className="button ghost small" onClick={() => requireUser("Welcome to Seatora")}>
                 <LogIn size={15} aria-hidden="true" /> Log in
               </button>
             )}

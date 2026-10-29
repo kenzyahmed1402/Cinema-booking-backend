@@ -1,4 +1,4 @@
-// Calls to the CineMate API on the same site. The login travels in the
+// Calls to the Seatora API on the same site. The login travels in the
 // HTTP-only session cookie, which the browser sends by itself; this code
 // never sees or stores a token.
 

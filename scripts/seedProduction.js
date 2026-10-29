@@ -45,7 +45,7 @@ if (!production) {
 }
 // Without a name MongoDB silently uses a database called "test"
 if (!production.database) {
-  fail("MONGO_URI in .env.production needs a database name, e.g. .../cinemate-prod?retryWrites=true");
+  fail("MONGO_URI in .env.production needs a database name, e.g. .../seatora-prod?retryWrites=true");
 }
 
 // The deployed app gets its own database, so local testing never touches it

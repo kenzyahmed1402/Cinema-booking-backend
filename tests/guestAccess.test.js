@@ -110,7 +110,7 @@ describe("visitors who haven't logged in", () => {
     const first = await api.post("/agent/chat").send({ message: "Two seats please" });
     assert.equal(first.status, 200, JSON.stringify(first.body));
     const visitor = cookiesFrom(first);
-    assert.match(visitor[0], /^cinemate_visitor=/);
+    assert.match(visitor[0], /^seatora_visitor=/);
     assert.match(requests[0].systemInstruction, /isn't logged in/);
     const [card] = first.body.data.cards;
     assert.equal(card.totalCents, 2000);
@@ -126,7 +126,7 @@ describe("visitors who haven't logged in", () => {
       .set("Cookie", cookieHeader(visitor))
       .send({ email: alice.user.email, password: "password123" });
     assert.equal(login.status, 200);
-    assert.ok((login.headers["set-cookie"] ?? []).some((c) => /^cinemate_visitor=;/.test(c)), "visitor cookie cleared");
+    assert.ok((login.headers["set-cookie"] ?? []).some((c) => /^seatora_visitor=;/.test(c)), "visitor cookie cleared");
     assert.equal(String((await AgentProposal.findById(card.proposal)).user), String(alice.user._id));
     assert.equal(await AgentConversation.countDocuments({ user: alice.user._id }), 1);
 
@@ -146,7 +146,7 @@ describe("visitors who haven't logged in", () => {
     const [card] = chat.body.data.cards;
 
     const guest = await api.post("/auth/guest").set("Cookie", cookieHeader(cookiesFrom(chat)));
-    const session = cookiesFrom(guest).filter((c) => c.startsWith("cinemate_session="));
+    const session = cookiesFrom(guest).filter((c) => c.startsWith("seatora_session="));
     const confirmed = await api.post(`/agent/proposals/${card.proposal}/confirm`).set("Cookie", cookieHeader(session));
     assert.equal(confirmed.status, 200, JSON.stringify(confirmed.body));
     assert.equal(String(confirmed.body.data.booking.user), guest.body.data.user._id);

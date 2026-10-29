@@ -12,7 +12,7 @@ const JWT_ALGORITHM = 'HS256';
 // the token. SameSite=Strict keeps other sites' pages from sending it, which
 // also protects against cross-site request forgery. API clients and tests
 // can keep sending the token as a Bearer header instead.
-export const SESSION_COOKIE = 'cinemate_session';
+export const SESSION_COOKIE = 'seatora_session';
 
 const cookieOptions = () => ({
   httpOnly: true,
@@ -34,7 +34,7 @@ const cookieValue = (header, name) => {
 // Visitors who haven't logged in get a random ID in their own cookie, so
 // their chat with the assistant can be kept and moved to their account when
 // they log in. It identifies a browser, never a person, and lasts a day.
-export const VISITOR_COOKIE = 'cinemate_visitor';
+export const VISITOR_COOKIE = 'seatora_visitor';
 const VISITOR_DAY_MS = 24 * 60 * 60 * 1000;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

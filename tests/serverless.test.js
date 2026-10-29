@@ -37,7 +37,7 @@ describe("connectOnce", () => {
   });
 
   it("answers 503 without the connection details when the database is down, and tries again next time", async () => {
-    process.env.MONGO_URI = "mongodb://user:db-secret-pw@127.0.0.1:1/cinemate";
+    process.env.MONGO_URI = "mongodb://user:db-secret-pw@127.0.0.1:1/seatora";
     for (let attempt = 0; attempt < 2; attempt++) {
       await assert.rejects(connectOnce({ serverSelectionTimeoutMS: 300 }), (err) => {
         assert.equal(err.statusCode, 503);
@@ -58,16 +58,16 @@ describe("connectOnce", () => {
     });
 
     it("connects once and reuses the connection", async () => {
-      process.env.MONGO_URI = mongo.getUri("cinemate");
+      process.env.MONGO_URI = mongo.getUri("seatora");
       await Promise.all([connectOnce(), connectOnce()]);
       assert.equal(mongoose.connection.readyState, 1);
-      assert.equal(mongoose.connection.name, "cinemate");
+      assert.equal(mongoose.connection.name, "seatora");
       await connectOnce();
       assert.equal(mongoose.connections.length, 1);
     });
 
     it("sends queries straight to the driver instead of holding them back", async () => {
-      process.env.MONGO_URI = mongo.getUri("cinemate");
+      process.env.MONGO_URI = mongo.getUri("seatora");
       await connectOnce();
       const Probe = mongoose.model("Probe", new mongoose.Schema({ n: Number }));
       // What a query sees when Mongoose thinks the collection isn't ready,

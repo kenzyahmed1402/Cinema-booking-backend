@@ -39,7 +39,7 @@ describe("scripts/seedProduction.js settings checks", () => {
   it("refuses a missing, invalid or unnamed database", async () => {
     const cases = [
       ["ADMIN_PASSWORD=a-long-admin-password\n", /MONGO_URI is missing/],
-      ["MONGO_URI=mongodb+srv://<user>:<password>@<cluster-host>/cinemate-prod\n", /not a valid connection string/],
+      ["MONGO_URI=mongodb+srv://<user>:<password>@<cluster-host>/seatora-prod\n", /not a valid connection string/],
       ["MONGO_URI=mongodb+srv://u:p@cluster0.example.net/?retryWrites=true\n", /needs a database name/],
     ];
     for (const [production, message] of cases) {
@@ -52,8 +52,8 @@ describe("scripts/seedProduction.js settings checks", () => {
   it("refuses the database the local .env uses, and never prints the password", async () => {
     const result = await seed(
       folder({
-        production: "MONGO_URI=mongodb+srv://prod-user:prod-secret-pw@cluster0.example.net/cinemate?w=majority\n",
-        local: "MONGO_URI=mongodb+srv://dev-user:dev-secret-pw@cluster0.example.net/cinemate\n",
+        production: "MONGO_URI=mongodb+srv://prod-user:prod-secret-pw@cluster0.example.net/seatora?w=majority\n",
+        local: "MONGO_URI=mongodb+srv://dev-user:dev-secret-pw@cluster0.example.net/seatora\n",
       })
     );
     assert.equal(result.status, 1);
@@ -76,33 +76,33 @@ describe("scripts/seedProduction.js seeding", () => {
   it("adds the catalogue and admin from .env.production only, ignoring the local .env", async () => {
     folder = makeFolder({
       production: [
-        `MONGO_URI=${mongo.getUri("cinemate-prod")}`,
+        `MONGO_URI=${mongo.getUri("seatora-prod")}`,
         "ADMIN_EMAIL=prod-admin@example.com",
         "ADMIN_PASSWORD=a-long-production-password",
       ].join("\n"),
       // Must not be used, not even for settings .env.production leaves out
-      local: [`MONGO_URI=${mongo.getUri("cinemate-local")}`, "CINEMA_TZ=Not/AZone"].join("\n"),
+      local: [`MONGO_URI=${mongo.getUri("seatora-local")}`, "CINEMA_TZ=Not/AZone"].join("\n"),
     });
 
     const result = await seed(folder);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Seeding the database "cinemate-prod"/);
+    assert.match(result.stdout, /Seeding the database "seatora-prod"/);
     assert.match(result.stdout, /Demo catalogue added/);
     assert.match(result.stdout, /Admin user created successfully/);
 
     const connection = await mongoose.createConnection(mongo.getUri()).asPromise();
-    const prod = connection.useDb("cinemate-prod");
+    const prod = connection.useDb("seatora-prod");
     assert.equal(await prod.collection("cinemas").countDocuments(), DEMO_CINEMAS.length);
     const admin = await prod.collection("users").findOne({ email: "prod-admin@example.com" });
     assert.equal(admin.role, "ADMIN");
-    assert.equal(await connection.useDb("cinemate-local").collection("cinemas").countDocuments(), 0);
+    assert.equal(await connection.useDb("seatora-local").collection("cinemas").countDocuments(), 0);
     await connection.close();
   });
 
   it("stops at the first failing step", async () => {
     const other = makeFolder({
       production: [
-        `MONGO_URI=${mongo.getUri("cinemate-other")}`,
+        `MONGO_URI=${mongo.getUri("seatora-other")}`,
         "CINEMA_TZ=Not/AZone",
         "ADMIN_PASSWORD=a-long-production-password",
       ].join("\n"),

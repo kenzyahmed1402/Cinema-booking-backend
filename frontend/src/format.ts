@@ -37,3 +37,7 @@ export const longDate = (iso: string) =>
     minute: "2-digit",
     hourCycle: "h23",
   }).format(new Date(iso));
+
+// "Seatora Downtown" -> "Downtown": lists show only the area. Cinemas created
+// before the rename are still called "CineMate ..."
+export const cinemaArea = (name: string) => name.replace(/^(Seatora|CineMate)\s+/, "");

@@ -5,7 +5,7 @@ import { localParts, zonedTime } from "../utils/timezone.js";
 
 export const DEMO_CINEMAS = [
   {
-    name: "CineMate Downtown",
+    name: "Seatora Downtown",
     location: "Downtown, 12 Central Avenue",
     basePrice: 11,
     screens: [
@@ -14,7 +14,7 @@ export const DEMO_CINEMAS = [
     ],
   },
   {
-    name: "CineMate Riverside",
+    name: "Seatora Riverside",
     location: "Riverside, 48 Harbour Road",
     basePrice: 8,
     screens: [
@@ -23,7 +23,7 @@ export const DEMO_CINEMAS = [
     ],
   },
   {
-    name: "CineMate Uptown",
+    name: "Seatora Uptown",
     location: "Uptown, 7 Hilltop Square",
     basePrice: 13,
     screens: [

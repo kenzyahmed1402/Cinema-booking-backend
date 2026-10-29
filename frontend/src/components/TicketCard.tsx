@@ -5,7 +5,7 @@ import { Poster } from "./Poster";
 import { QrCode } from "./QrCode";
 
 // A short, readable booking reference from the booking's ID
-export const ticketReference = (id: string) => `CM-${id.slice(-8).toUpperCase()}`;
+export const ticketReference = (id: string) => `ST-${id.slice(-8).toUpperCase()}`;
 
 // Where the QR code leads: this booking's page, which only its owner can open
 export const ticketLink = (id: string) => `${window.location.origin}/#/booking/${id}`;

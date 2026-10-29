@@ -6,7 +6,7 @@ useTestDatabase();
 
 // The session cookie from a response, as a browser would send it back
 const sessionFrom = (res) => {
-  const header = (res.headers["set-cookie"] ?? []).find((cookie) => cookie.startsWith("cinemate_session="));
+  const header = (res.headers["set-cookie"] ?? []).find((cookie) => cookie.startsWith("seatora_session="));
   assert.ok(header, "no session cookie was set");
   return { header, cookie: header.split(";")[0] };
 };
@@ -41,7 +41,7 @@ describe("cookie login for the web app", () => {
     const res = await api.post("/auth/logout");
     assert.equal(res.status, 204);
     const { header } = sessionFrom(res);
-    assert.match(header, /^cinemate_session=;/);
+    assert.match(header, /^seatora_session=;/);
     assert.match(header, /Expires=Thu, 01 Jan 1970/);
   });
 
@@ -49,9 +49,9 @@ describe("cookie login for the web app", () => {
     const alice = await createUser();
     const bob = await createUser();
     assert.equal((await api.get("/auth/me")).status, 401);
-    assert.equal((await api.get("/auth/me").set("Cookie", "cinemate_session=not-a-token")).status, 401);
+    assert.equal((await api.get("/auth/me").set("Cookie", "seatora_session=not-a-token")).status, 401);
 
-    const me = await api.get("/auth/me").set(alice.auth).set("Cookie", `cinemate_session=${bob.token}`);
+    const me = await api.get("/auth/me").set(alice.auth).set("Cookie", `seatora_session=${bob.token}`);
     assert.equal(me.body.data.user.email, alice.user.email);
   });
 });

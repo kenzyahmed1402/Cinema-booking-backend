@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { api, errorMessage } from "../api";
 import type { Movie, Showtime } from "../types";
-import { dayLabel, localDay, money, runtime, time } from "../format";
+import { cinemaArea, dayLabel, localDay, money, runtime, time } from "../format";
 import { go, href } from "../route";
 import { Poster } from "../components/Poster";
 import { CinemaHall, type SeatState } from "../components/CinemaHall";
@@ -70,7 +70,7 @@ export const Home = () => {
   // The genres and cinemas that have showtimes, for the filters
   const genres = useMemo(() => [...new Set(showtimes.map((s) => s.movie.genre))].sort(), [showtimes]);
   const cinemas = useMemo(() => {
-    const byId = new Map(showtimes.map((s) => [s.screen.cinema._id, s.screen.cinema.name.replace("CineMate ", "")]));
+    const byId = new Map(showtimes.map((s) => [s.screen.cinema._id, cinemaArea(s.screen.cinema.name)]));
     return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [showtimes]);
 
@@ -311,7 +311,7 @@ export const Home = () => {
                         <strong>{time(showtime.startTime)}</strong>
                         <span>
                           <MapPin size={12} aria-hidden="true" />
-                          {showtime.screen.cinema.name.replace("CineMate ", "")}
+                          {cinemaArea(showtime.screen.cinema.name)}
                         </span>
                         <span>
                           <Armchair size={12} aria-hidden="true" />

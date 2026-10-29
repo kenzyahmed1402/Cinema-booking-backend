@@ -66,7 +66,7 @@ const draw = (booking: BookingDetail, poster: HTMLImageElement | null) => {
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#efe8da";
   ctx.font = `600 34px ${SERIF}`;
-  ctx.fillText("CineMate", 90, 120);
+  ctx.fillText("Seatora", 90, 120);
   ctx.font = `600 22px ${SANS}`;
   ctx.textAlign = "right";
   ctx.fillText(`ADMIT ${booking.seats.length}`, WIDTH - 90, 118);
@@ -166,7 +166,7 @@ export const downloadTicketImage = async (booking: BookingDetail, posterSvg: SVG
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `CineMate-ticket-${ticketReference(booking._id)}.png`;
+  link.download = `Seatora-ticket-${ticketReference(booking._id)}.png`;
   document.body.appendChild(link);
   link.click();
   link.remove();

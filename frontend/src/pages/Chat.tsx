@@ -183,7 +183,7 @@ export const Chat = ({ initial }: { initial?: string }) => {
                 </span>
               )}
               <div className="msg-content">
-                <span className="sr-only">{message.role === "assistant" ? "CineMate:" : "You:"}</span>
+                <span className="sr-only">{message.role === "assistant" ? "Seatora:" : "You:"}</span>
                 {message.text && (
                   <div className="msg-text">
                     <MessageText text={message.text} />
@@ -209,7 +209,7 @@ export const Chat = ({ initial }: { initial?: string }) => {
               <span className="msg-avatar" aria-hidden="true">
                 <Sparkles size={15} />
               </span>
-              <div className="dots" aria-label="CineMate is thinking">
+              <div className="dots" aria-label="Seatora is thinking">
                 <span />
                 <span />
                 <span />
